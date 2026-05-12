@@ -2,6 +2,7 @@ package shcm.shsupercm.fabric.citresewn.defaults.cit.conditions;
 
 import io.shcm.shsupercm.fabric.fletchingtable.api.Entrypoint;
 /*? >=1.21*/ import net.minecraft.component.ComponentType;
+/*? >=1.21*/ import net.minecraft.component.DataComponentTypes;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.registry.Registries;
@@ -70,8 +71,15 @@ public class ConditionComponents extends CITCondition {
         Object stackComponent = context.stack.getComponents().get(this.componentType);
         if (stackComponent != null) {
             if (stackComponent instanceof Text text) {
-                if (this.fallbackNBTCheck.testString(null, text, context))
+                boolean textMatch = this.fallbackNBTCheck.testString(null, text, context);
+                if (textMatch)
                     return true;
+
+                // The common custom_name case used by large rename packs only needs the plain text
+                // representation. Falling back to codec/NBT conversion here is expensive and does
+                // not change the result for standard renamed-item matching.
+                if (this.componentType == DataComponentTypes.CUSTOM_NAME && this.componentMetadata.isEmpty())
+                    return false;
             } /*else if (stackComponent instanceof LoreComponent lore) {
                 //todo avoid nbt based check if possible
             }*/
