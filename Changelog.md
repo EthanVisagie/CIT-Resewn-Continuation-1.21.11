@@ -1,3 +1,10 @@
+## 1.2.2-fork.3+1.21.11
+
+1. Fixed item CITs that use both `model` and `texture`.
+2. The resolved `texture` value now replaces `layer0` in the custom model.
+3. Legacy `nbt.display.Name` rules now also check the modern item name component.
+4. Legacy name compatibility messages now log as warnings instead of errors.
+
 ## 1.2.2-fork.1+1.21.11
 
 - Forked the abandoned CIT Resewn project into CIT Resewn Continuation

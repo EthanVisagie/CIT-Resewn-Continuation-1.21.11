@@ -1,5 +1,7 @@
 package shcm.shsupercm.fabric.citresewn.defaults.cit.types;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.shcm.shsupercm.fabric.fletchingtable.api.Entrypoint;
 import net.minecraft.client.item.ItemAsset;
 import net.minecraft.client.render.item.model.BasicItemModel;
@@ -34,7 +36,6 @@ import java.util.Map;
 import java.util.Set;
 import java.io.IOException;
 import java.io.StringReader;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 
 public class TypeItem extends CITType {
@@ -78,6 +79,19 @@ public class TypeItem extends CITType {
         if (modelProp != null && modelProp.keyMetadata() != null)
             warn("Sub-item model overrides are not ported to 1.21.11 yet", modelProp, properties);
 
+        PropertyValue textureProp = properties.getLastWithoutMetadata("citresewn", "texture", "tile");
+        for (PropertyValue propertyValue : properties.get("citresewn", "texture", "tile"))
+            if (propertyValue.keyMetadata() != null)
+                warn("Sub-item texture overrides are not ported to 1.21.11 yet", propertyValue, properties);
+
+        if (textureProp != null) {
+            Identifier resolvedTexture = resolveAsset(properties.identifier, textureProp, "textures", ".png", resourceManager);
+            if (resolvedTexture == null)
+                throw new CITParsingException("Could not resolve replacement texture", properties, textureProp.position());
+
+            this.replacementTextureId = asTextureId(resolvedTexture);
+        }
+
         if (modelProp != null) {
             Identifier resolvedModel = resolveAsset(properties.identifier, modelProp, "models", ".json", resourceManager);
             if (resolvedModel == null)
@@ -89,17 +103,7 @@ public class TypeItem extends CITType {
         }
 
         if (this.replacementModelId == null && !properties.get("citresewn", "texture", "tile").isEmpty()) {
-            PropertyValue textureProp = properties.getLastWithoutMetadata("citresewn", "texture", "tile");
-            for (PropertyValue propertyValue : properties.get("citresewn", "texture", "tile"))
-                if (propertyValue.keyMetadata() != null)
-                    warn("Sub-item texture overrides are not ported to 1.21.11 yet", propertyValue, properties);
-
             if (textureProp != null) {
-                Identifier resolvedTexture = resolveAsset(properties.identifier, textureProp, "textures", ".png", resourceManager);
-                if (resolvedTexture == null)
-                    throw new CITParsingException("Could not resolve replacement texture", properties, textureProp.position());
-
-                this.replacementTextureId = asTextureId(resolvedTexture);
                 for (Item item : this.items) {
                     Identifier itemModelId = itemModelId(item);
                     this.generatedTextureModelIds.putIfAbsent(itemModelId, generatedTextureModelId(properties.identifier, itemModelId));
@@ -129,8 +133,9 @@ public class TypeItem extends CITType {
             try {
                 var resource = resourceManager.getResource(this.replacementModelResourceId);
                 if (resource.isPresent())
-                    try (InputStreamReader reader = new InputStreamReader(resource.get().getInputStream(), StandardCharsets.UTF_8)) {
-                        models.put(this.replacementModelId, JsonUnbakedModel.deserialize(reader));
+                    try (var inputStream = resource.get().getInputStream()) {
+                        String json = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+                        models.put(this.replacementModelId, JsonUnbakedModel.deserialize(new StringReader(applyReplacementTexture(json))));
                     }
             } catch (IOException e) {
                 CITResewn.logErrorLoading("Errored while loading CIT item model " + this.replacementModelResourceId + ": " + e.getMessage());
@@ -148,6 +153,19 @@ public class TypeItem extends CITType {
         }
 
         return models;
+    }
+
+    private String applyReplacementTexture(String json) {
+        if (this.replacementTextureId == null)
+            return json;
+
+        JsonObject model = JsonParser.parseString(json).getAsJsonObject();
+        JsonObject textures = model.has("textures") && model.get("textures").isJsonObject()
+                ? model.getAsJsonObject("textures")
+                : new JsonObject();
+        textures.addProperty("layer0", this.replacementTextureId.toString());
+        model.add("textures", textures);
+        return model.toString();
     }
 
     public boolean supportsItemModelOverride() {
