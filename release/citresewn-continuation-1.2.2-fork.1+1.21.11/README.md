@@ -31,21 +31,18 @@ Download release artifacts from the fork repository releases page:
 
 https://github.com/EthanVisagie/CIT-Resewn-Continuation/releases
 
-For Minecraft `1.21.11`, use both of these jars:
+For Minecraft `1.21.11`, install the main jar:
 - `citresewn-continuation-1.2.2-fork.1+1.21.11.jar`
-- `citresewn-continuation-defaults-1.2.2-fork.1+1.21.11.jar`
+
+The defaults module is bundled inside the main jar as a nested Fabric jar. You do not need to install the defaults jar separately.
 
 ## Installation
 
 1. Install Fabric Loader for Minecraft `1.21.11`.
-2. Put both mod jars in your `mods` folder.
+2. Put `citresewn-continuation-1.2.2-fork.1+1.21.11.jar` in your `mods` folder.
 3. Launch the game once.
 4. Put any CIT-compatible resource pack in `resourcepacks`.
 5. Enable the resource pack in-game.
-
-Required mod jars:
-- `citresewn-continuation-1.2.2-fork.1+1.21.11.jar`
-- `citresewn-continuation-defaults-1.2.2-fork.1+1.21.11.jar`
 
 ## Pack Compatibility
 

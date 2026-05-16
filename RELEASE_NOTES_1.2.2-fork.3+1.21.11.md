@@ -12,15 +12,14 @@ This release fixes a 1.21.11 item CIT regression found with packs that define bo
 
 1. Verified the reported `Fading Horizon` diamond sword pack.
 2. Verified `TooManyRenamesV19.9.zip` still loads and applies item textures.
-3. Built the main and defaults jars for Minecraft `1.21.11`.
+3. Built the main jar for Minecraft `1.21.11` with the defaults module bundled as a nested Fabric jar.
 
 ## Installation
 
 1. Install Fabric Loader for Minecraft `1.21.11`.
-2. Put both jars into your `mods` folder.
+2. Put `citresewn-continuation-1.2.2-fork.3+1.21.11.jar` into your `mods` folder.
 3. Enable your CIT resource packs in Minecraft.
 
 ## Artifacts
 
 1. `citresewn-continuation-1.2.2-fork.3+1.21.11.jar`
-2. `citresewn-continuation-defaults-1.2.2-fork.3+1.21.11.jar`

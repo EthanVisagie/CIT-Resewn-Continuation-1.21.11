@@ -15,9 +15,8 @@ This is the first public release of CIT Resewn Continuation, an unofficial maint
 ## Installation
 
 1. Install Fabric Loader for Minecraft `1.21.11`.
-2. Put both jars into your `mods` folder:
-   - `citresewn-continuation-1.2.2-fork.1+1.21.11.jar`
-   - `citresewn-continuation-defaults-1.2.2-fork.1+1.21.11.jar`
+2. Put `citresewn-continuation-1.2.2-fork.1+1.21.11.jar` into your `mods` folder.
+   - The defaults module is bundled inside the main jar as a nested Fabric jar.
 3. Launch Minecraft.
 4. Put your CIT-compatible resource pack in `resourcepacks`.
 5. Enable the pack in-game.

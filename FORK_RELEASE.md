@@ -55,11 +55,10 @@ Before publishing:
 4. Test with at least:
    - `TooManyRenamesV19.9.zip`
    - one enchantment-heavy pack
-5. Confirm the final jars are:
-   - `citresewn-continuation-1.2.2-fork.1+1.21.11.jar`
-   - `citresewn-continuation-defaults-1.2.2-fork.1+1.21.11.jar`
+5. Confirm the final user-facing jar is:
+   - `citresewn-continuation-1.2.2-fork.3+1.21.11.jar`
+6. Confirm the defaults module is bundled inside the main jar as a nested Fabric jar.
 
 ## Current Artifact Paths
 
-- `versions/1.21.11/build/libs/citresewn-continuation-1.2.2-fork.1+1.21.11.jar`
-- `defaults/versions/1.21.11/build/libs/citresewn-continuation-defaults-1.2.2-fork.1+1.21.11.jar`
+- `versions/1.21.11/build/libs/citresewn-continuation-1.2.2-fork.3+1.21.11.jar`
