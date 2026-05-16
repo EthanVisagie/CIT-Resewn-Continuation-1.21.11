@@ -47,6 +47,7 @@ public class TypeItem extends CITType {
     private Identifier replacementModelId;
     private Identifier replacementModelResourceId;
     private Identifier replacementTextureId;
+    private final Map<String, Identifier> replacementTextures = new LinkedHashMap<>();
     private final Map<Identifier, Identifier> generatedTextureModelIds = new LinkedHashMap<>();
     private boolean warnedTextureOnly;
 
@@ -80,9 +81,6 @@ public class TypeItem extends CITType {
             warn("Sub-item model overrides are not ported to 1.21.11 yet", modelProp, properties);
 
         PropertyValue textureProp = properties.getLastWithoutMetadata("citresewn", "texture", "tile");
-        for (PropertyValue propertyValue : properties.get("citresewn", "texture", "tile"))
-            if (propertyValue.keyMetadata() != null)
-                warn("Sub-item texture overrides are not ported to 1.21.11 yet", propertyValue, properties);
 
         if (textureProp != null) {
             Identifier resolvedTexture = resolveAsset(properties.identifier, textureProp, "textures", ".png", resourceManager);
@@ -90,6 +88,17 @@ public class TypeItem extends CITType {
                 throw new CITParsingException("Could not resolve replacement texture", properties, textureProp.position());
 
             this.replacementTextureId = asTextureId(resolvedTexture);
+        }
+
+        for (PropertyValue propertyValue : properties.get("citresewn", "texture", "tile")) {
+            if (propertyValue.keyMetadata() == null)
+                continue;
+
+            Identifier resolvedTexture = resolveAsset(properties.identifier, propertyValue, "textures", ".png", resourceManager);
+            if (resolvedTexture == null)
+                throw new CITParsingException("Could not resolve replacement texture", properties, propertyValue.position());
+
+            this.replacementTextures.put(propertyValue.keyMetadata(), asTextureId(resolvedTexture));
         }
 
         if (modelProp != null) {
@@ -156,14 +165,17 @@ public class TypeItem extends CITType {
     }
 
     private String applyReplacementTexture(String json) {
-        if (this.replacementTextureId == null)
+        if (this.replacementTextureId == null && this.replacementTextures.isEmpty())
             return json;
 
         JsonObject model = JsonParser.parseString(json).getAsJsonObject();
         JsonObject textures = model.has("textures") && model.get("textures").isJsonObject()
                 ? model.getAsJsonObject("textures")
                 : new JsonObject();
-        textures.addProperty("layer0", this.replacementTextureId.toString());
+        if (this.replacementTextureId != null)
+            textures.addProperty("layer0", this.replacementTextureId.toString());
+        for (Map.Entry<String, Identifier> entry : this.replacementTextures.entrySet())
+            textures.addProperty(entry.getKey(), entry.getValue().toString());
         model.add("textures", textures);
         return model.toString();
     }
