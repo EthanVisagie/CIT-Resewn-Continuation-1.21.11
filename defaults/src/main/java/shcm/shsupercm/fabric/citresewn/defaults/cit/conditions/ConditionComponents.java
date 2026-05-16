@@ -6,6 +6,7 @@ import io.shcm.shsupercm.fabric.fletchingtable.api.Entrypoint;
 /*? >=1.21*/ import net.minecraft.component.type.CustomModelDataComponent;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtFloat;
+import net.minecraft.nbt.NbtInt;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
@@ -31,6 +32,7 @@ public class ConditionComponents extends CITCondition {
 
     private ConditionNBT fallbackNBTCheck;
     private boolean legacyCustomModelData;
+    private boolean legacyDamage;
 
     @Override
     public void load(PropertyKey key, PropertyValue value, PropertyGroup properties) throws CITParsingException {
@@ -45,6 +47,11 @@ public class ConditionComponents extends CITCondition {
                 CITResewn.logWarnLoading(properties.messageWithDescriptorOf("Using legacy nbt.display.Lore", value.position()));
             } else if (metadata.equals("CustomModelData")) {
                 this.legacyCustomModelData = true;
+                this.matchValue = value.value();
+                loadFallbackNBTCheck(value, properties, new String[0]);
+                return;
+            } else if (metadata.equals("Damage")) {
+                this.legacyDamage = true;
                 this.matchValue = value.value();
                 loadFallbackNBTCheck(value, properties, new String[0]);
                 return;
@@ -86,6 +93,8 @@ public class ConditionComponents extends CITCondition {
         /*? >=1.21 {*/
         if (this.legacyCustomModelData)
             return testLegacyCustomModelData(context);
+        if (this.legacyDamage)
+            return testLegacyDamage(context);
 
         if (testComponent(context, this.componentType))
             return true;
@@ -107,6 +116,13 @@ public class ConditionComponents extends CITCondition {
         /*?} else {*/
         /*return this.fallbackNBTCheck.testValue(NbtFloat.of(customModelData.value()), context);
         *//*?}*/
+    }
+
+    private boolean testLegacyDamage(CITContext context) {
+        if (!context.stack.isDamageable())
+            return false;
+
+        return this.fallbackNBTCheck.testValue(NbtInt.of(context.stack.getDamage()), context);
     }
 
     private boolean testComponent(CITContext context, ComponentType<?> componentType) {
