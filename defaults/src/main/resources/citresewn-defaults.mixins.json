@@ -17,6 +17,7 @@
     "types.item.BakedModelManagerMixin",
     "types.item.ItemAssetsLoaderMixin",
     "types.item.ItemModelManagerMixin",
+    "types.item.SelectItemModelMixin",
     "types.item.ItemStackMixin"
   ],
   "injectors": {

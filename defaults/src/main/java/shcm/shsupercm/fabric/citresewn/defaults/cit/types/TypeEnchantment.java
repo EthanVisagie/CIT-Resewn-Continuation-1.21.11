@@ -1,19 +1,27 @@
 package shcm.shsupercm.fabric.citresewn.defaults.cit.types;
 
 import io.shcm.shsupercm.fabric.fletchingtable.api.Entrypoint;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.enchantment.EnchantmentHelper;
-import net.minecraft.client.render.LayeringTransform;
-import net.minecraft.client.render.OutputTarget;
+/*? >=1.21.11*/
+import net.minecraft.client.MinecraftClient;
+/*? >=1.21.11*/
+import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.render.RenderLayer;
+/*? >=1.21.11*/
+import net.minecraft.client.render.LayeringTransform;
+/*? >=1.21.11*/
+import net.minecraft.client.render.OutputTarget;
+/*? >=1.21.11*/
 import net.minecraft.client.render.RenderSetup;
+/*? >=1.21.11*/
 import net.minecraft.client.render.TextureTransform;
+/*? >=1.21.11*/
+import net.minecraft.util.Util;
+/*? >=1.21.11*/
+import org.joml.Matrix4f;
 import net.minecraft.item.ItemStack;
 import net.minecraft.resource.ResourceManager;
 import net.minecraft.util.Identifier;
-import net.minecraft.util.Util;
-import org.joml.Matrix4f;
 import shcm.shsupercm.fabric.citresewn.api.CITGlobalProperties;
 import shcm.shsupercm.fabric.citresewn.api.CITTypeContainer;
 import shcm.shsupercm.fabric.citresewn.cit.CIT;
@@ -23,6 +31,7 @@ import shcm.shsupercm.fabric.citresewn.cit.CITParsingException;
 import shcm.shsupercm.fabric.citresewn.cit.CITContext;
 import shcm.shsupercm.fabric.citresewn.cit.CITType;
 import shcm.shsupercm.fabric.citresewn.defaults.config.CITResewnDefaultsConfig;
+/*? >=1.21.11*/
 import shcm.shsupercm.fabric.citresewn.defaults.mixin.types.enchantment.RenderLayerInvoker;
 import shcm.shsupercm.fabric.citresewn.pack.format.PropertyGroup;
 import shcm.shsupercm.fabric.citresewn.pack.format.PropertyKey;
@@ -49,7 +58,9 @@ public class TypeEnchantment extends CITType {
     private RenderLayer itemGlintLayer;
     private RenderLayer itemGlintTranslucentLayer;
     private RenderLayer armorGlintLayer;
+    /*? >=1.21.11*/
     private TextureTransform itemTextureTransform;
+    /*? >=1.21.11*/
     private TextureTransform armorTextureTransform;
 
     @Override
@@ -122,6 +133,7 @@ public class TypeEnchantment extends CITType {
         warnIfPresent(properties, "a", "custom glint colors are not ported to 1.21.11 yet");
     }
 
+    /*? >=1.21.11 {*/
     public RenderLayer getItemGlintLayer(boolean translucent) {
         if (translucent) {
             if (this.itemGlintTranslucentLayer == null)
@@ -184,6 +196,15 @@ public class TypeEnchantment extends CITType {
                     .scale(scale);
         });
     }
+    /*?} else {*/
+    /*public RenderLayer getItemGlintLayer(boolean translucent) {
+        return translucent ? RenderLayer.getArmorEntityGlint() : RenderLayer.getGlint();
+    }
+
+    public RenderLayer getArmorGlintLayer() {
+        return RenderLayer.getArmorEntityGlint();
+    }
+    *//*?}*/
 
     private void warnIfPresent(PropertyGroup properties, String key, String message) {
         for (PropertyValue propertyValue : properties.get("citresewn", key)) {

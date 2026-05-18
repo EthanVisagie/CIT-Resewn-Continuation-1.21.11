@@ -2,9 +2,11 @@ package shcm.shsupercm.fabric.citresewn.defaults.mixin.types.enchantment;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+/*? >=1.21.11 {*/
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.TexturedRenderLayers;
+/*?}*/
+import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.command.OrderedRenderCommandQueue;
 import net.minecraft.client.render.item.ItemRenderState;
 import net.minecraft.client.render.model.BakedQuad;
@@ -59,8 +61,12 @@ public class ItemRenderStateLayerMixin {
 
         original.call(commandQueue, matrices, displayContext, light, overlay, batchingIndex, tints, quads, renderLayer, keepVanillaGlint ? glint : ItemRenderState.Glint.NONE);
 
+        /*? >=1.21.11 {*/
         boolean translucent = MinecraftClient.usesImprovedTransparency()
                 && (renderLayer == TexturedRenderLayers.getItemTranslucentCull() || renderLayer == TexturedRenderLayers.getBlockTranslucentCull());
+        /*?} else {*/
+        /*boolean translucent = false;
+        *//*?}*/
 
         for (CIT<TypeEnchantment> enchantment : enchantments)
             commandQueue.submitItem(matrices, displayContext, light, overlay, batchingIndex, tints, quads, enchantment.type.getItemGlintLayer(translucent), ItemRenderState.Glint.NONE);
