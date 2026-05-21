@@ -10,7 +10,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import shcm.shsupercm.fabric.citresewn.cit.CIT;
 import shcm.shsupercm.fabric.citresewn.defaults.cit.types.TypeItem;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -24,9 +26,10 @@ public class BakedModelManagerMixin {
         if (!CONTAINER.active())
             return;
 
+        List<CIT<TypeItem>> loadedSnapshot = new ArrayList<>(CONTAINER.loaded);
         cir.setReturnValue(cir.getReturnValue().thenApply(models -> {
             Map<Identifier, UnbakedModel> syntheticModels = new HashMap<>(models);
-            for (CIT<TypeItem> cit : CONTAINER.loaded)
+            for (CIT<TypeItem> cit : loadedSnapshot)
                 syntheticModels.putAll(cit.type.createUnbakedModels(resourceManager));
             return syntheticModels;
         }));

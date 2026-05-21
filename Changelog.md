@@ -1,3 +1,10 @@
+## 1.2.2-fork.7+1.21.11
+
+### Fixed
+
+- Reduced resource-reload pressure from large CIT packs by suppressing repeated legacy NBT compatibility warnings after the first few entries per pack.
+- Hardened item CIT model and asset reload hooks by snapshotting loaded item CITs before asynchronous model workers generate synthetic models.
+
 ## 1.2.2-fork.5+1.21.11
 
 ### Fixed
