@@ -7,7 +7,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import shcm.shsupercm.fabric.citresewn.cit.CIT;
 import shcm.shsupercm.fabric.citresewn.defaults.cit.types.TypeItem;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.renderer.item.ClientItem;
@@ -23,9 +25,10 @@ public class ItemAssetsLoaderMixin {
         if (!CONTAINER.active())
             return;
 
+        List<CIT<TypeItem>> loadedSnapshot = new ArrayList<>(CONTAINER.loaded);
         cir.setReturnValue(cir.getReturnValue().thenApply(result -> {
             Map<Identifier, ClientItem> contents = new HashMap<>(result.contents());
-            for (CIT<TypeItem> cit : CONTAINER.loaded)
+            for (CIT<TypeItem> cit : loadedSnapshot)
                 contents.putAll(cit.type.createItemAssets());
             return new ClientItemInfoLoader.LoadedClientInfos(contents);
         }));

@@ -16,10 +16,15 @@ import shcm.shsupercm.fabric.citresewn.pack.format.PropertyGroup;
 import shcm.shsupercm.fabric.citresewn.pack.format.PropertyKey;
 import shcm.shsupercm.fabric.citresewn.pack.format.PropertyValue;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 public class ConditionComponents extends CITCondition {
     /*? >=1.21*/ @Entrypoint(CITConditionContainer.ENTRYPOINT)
     public static final CITConditionContainer<ConditionComponents> CONTAINER = new CITConditionContainer<>(ConditionComponents.class, ConditionComponents::new,
             "components", "component", "nbt");
+    private static final int LEGACY_NBT_WARNING_LIMIT_PER_PACK = 20;
+    private static final Map<String, Integer> LEGACY_NBT_WARNING_COUNTS = new ConcurrentHashMap<>();
 
     /*? >=1.21*/ private DataComponentType<?> componentType;
     private String componentMetadata;
@@ -33,10 +38,10 @@ public class ConditionComponents extends CITCondition {
         if (key.path().equals("nbt")) {
             if (metadata.startsWith("display.Name")) {
                 metadata = "minecraft:custom_name" + value.keyMetadata().substring("display.Name".length());
-                CITResewn.logWarnLoading(properties.messageWithDescriptorOf("Using legacy nbt.display.Name", value.position()));
+                warnLegacyNbt(properties, value, "display.Name");
             } else if (metadata.startsWith("display.Lore")) {
                 metadata = "minecraft:lore" + value.keyMetadata().substring("display.Lore".length());
-                CITResewn.logWarnLoading(properties.messageWithDescriptorOf("Using legacy nbt.display.Lore", value.position()));
+                warnLegacyNbt(properties, value, "display.Lore");
             } else
                 throw new CITParsingException("NBT condition is not supported since 1.21", properties, value.position());
         }
@@ -62,6 +67,16 @@ public class ConditionComponents extends CITCondition {
         if (metadataNbtPath.length == 1 && metadataNbtPath[0].isEmpty())
             metadataNbtPath = new String[0];
         this.fallbackNBTCheck.loadNbtCondition(value, properties, metadataNbtPath, this.matchValue);
+    }
+
+    private static void warnLegacyNbt(PropertyGroup properties, PropertyValue value, String legacyPath) {
+        String warningKey = properties.packName + "|" + legacyPath;
+        int count = LEGACY_NBT_WARNING_COUNTS.merge(warningKey, 1, Integer::sum);
+        if (count <= LEGACY_NBT_WARNING_LIMIT_PER_PACK) {
+            CITResewn.logWarnLoading(properties.messageWithDescriptorOf("Using legacy nbt." + legacyPath, value.position()));
+        } else if (count == LEGACY_NBT_WARNING_LIMIT_PER_PACK + 1) {
+            CITResewn.logWarnLoading("Suppressing further legacy nbt." + legacyPath + " warnings for " + properties.packName + " during this session");
+        }
     }
 
     @Override
