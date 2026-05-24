@@ -493,6 +493,29 @@ public class TypeItem extends CITType {
         }
     }
 
+    public static class ItemCITCache extends CITCache.Single<TypeItem> {
+        private int lastComponentHash = 0;
+        private Item lastItem = null;
+
+        public ItemCITCache() {
+            super(CONTAINER::getRealTimeCIT);
+        }
+
+        @Override
+        public java.lang.ref.WeakReference<CIT<TypeItem>> get(CITContext context) {
+            Item item = context.stack.getItem();
+            int componentHash = context.stack.getComponents().hashCode();
+
+            if (item != lastItem || componentHash != lastComponentHash) {
+                this.cit = null;
+                this.lastItem = item;
+                this.lastComponentHash = componentHash;
+            }
+
+            return super.get(context);
+        }
+    }
+
     public interface CITCacheItem {
         CITCache.Single<TypeItem> citresewn$getCacheTypeItem();
     }

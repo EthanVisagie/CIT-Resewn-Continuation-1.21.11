@@ -166,7 +166,7 @@ public class ConditionNBT extends CITCondition {
             if (matchString.matches(element))
                 return true;
 
-            if (elementText == null) {
+            if (elementText == null && looksLikeJson(element)) {
                 try {
                     elementText = TextCodecs.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString(element)).result().orElse(null);
                 } catch (Exception ignored) { }
@@ -177,6 +177,16 @@ public class ConditionNBT extends CITCondition {
             return false;
 
         return matchString.matches(elementText.getString());
+    }
+
+    private static boolean looksLikeJson(String value) {
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            if (Character.isWhitespace(ch))
+                continue;
+            return ch == '{' || ch == '[';
+        }
+        return false;
     }
 
     protected static abstract class StringMatcher {
