@@ -1,8 +1,15 @@
-## 1.2.2-fork.9+26.1.2
+## 1.2.2-fork.10+26.1.2
 
 ### Fixed
 
 - Fixed texture-only item CITs that use enchantment conditions on Minecraft 26.1.2 by normalizing stack item model ids before generated model lookup.
+
+## 1.2.2-fork.9+26.1.2
+
+### Fixed
+
+- Reduced item/name/lore matching lag by avoiding JSON parsing for plain-text NBT/component strings.
+- Optimized simple regex/iregex NBT conditions by treating literal expressions as direct string matches.
 
 ## 1.2.2-fork.8+26.1.2
 
