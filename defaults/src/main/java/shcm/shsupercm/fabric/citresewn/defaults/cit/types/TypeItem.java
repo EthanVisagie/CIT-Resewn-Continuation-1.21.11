@@ -244,7 +244,7 @@ public class TypeItem extends CITType {
         if (this.generatedItemModelId != null)
             return this.generatedItemModelId;
 
-        Identifier itemModelId = stack.get(DataComponents.ITEM_MODEL);
+        Identifier itemModelId = normalizeItemModelId(stack.get(DataComponents.ITEM_MODEL));
         if (itemModelId == null)
             itemModelId = itemModelId(stack.getItem());
 
@@ -307,6 +307,17 @@ public class TypeItem extends CITType {
     private static Identifier itemModelId(Item item) {
         Identifier itemId = BuiltInRegistries.ITEM.getKey(item);
         return Identifier.fromNamespaceAndPath(itemId.getNamespace(), "item/" + itemId.getPath());
+    }
+
+    private static Identifier normalizeItemModelId(Identifier itemModelId) {
+        if (itemModelId == null)
+            return null;
+
+        String path = itemModelId.getPath();
+        if (!path.contains("/"))
+            return Identifier.fromNamespaceAndPath(itemModelId.getNamespace(), "item/" + path);
+
+        return itemModelId;
     }
 
     public static class Container extends CITTypeContainer<TypeItem> {
