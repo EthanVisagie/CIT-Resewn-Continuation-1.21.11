@@ -53,9 +53,9 @@ public class ConditionNBT extends CITCondition {
 
         try {
             if (nbtValue.startsWith("regex:"))
-                matchString = new StringMatcher.RegexMatcher(nbtValue.substring(6));
+                matchString = StringMatcher.regex(nbtValue.substring(6));
             else if (nbtValue.startsWith("iregex:"))
-                matchString = new StringMatcher.IRegexMatcher(nbtValue.substring(7));
+                matchString = StringMatcher.iregex(nbtValue.substring(7));
             else if (nbtValue.startsWith("pattern:"))
                 matchString = new StringMatcher.PatternMatcher(nbtValue.substring(8));
             else if (nbtValue.startsWith("ipattern:"))
@@ -166,7 +166,7 @@ public class ConditionNBT extends CITCondition {
             if (matchString.matches(element))
                 return true;
 
-            if (elementText == null) {
+            if (elementText == null && looksLikeJson(element)) {
                 try {
                     elementText = ComponentSerialization.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString(element)).result().orElse(null);
                 } catch (Exception ignored) { }
@@ -179,8 +179,41 @@ public class ConditionNBT extends CITCondition {
         return matchString.matches(elementText.getString());
     }
 
+    private static boolean looksLikeJson(String value) {
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            if (Character.isWhitespace(ch))
+                continue;
+            return ch == '{' || ch == '[';
+        }
+        return false;
+    }
+
     protected static abstract class StringMatcher {
         public abstract boolean matches(String value);
+
+        public static StringMatcher regex(String pattern) {
+            String literal = literalRegex(pattern);
+            return literal == null ? new RegexMatcher(pattern) : new DirectMatcher(literal);
+        }
+
+        public static StringMatcher iregex(String pattern) {
+            String literal = literalRegex(pattern);
+            return literal == null ? new IRegexMatcher(pattern) : new IDirectMatcher(literal);
+        }
+
+        private static String literalRegex(String pattern) {
+            if (pattern.length() >= 2 && pattern.charAt(0) == '(' && pattern.charAt(pattern.length() - 1) == ')')
+                pattern = pattern.substring(1, pattern.length() - 1);
+
+            for (int i = 0; i < pattern.length(); i++) {
+                char c = pattern.charAt(i);
+                if (c == '\\' || c == '[' || c == ']' || c == '{' || c == '}' || c == '*' || c == '+' || c == '?' || c == '|' || c == '^' || c == '$' || c == '.')
+                    return null;
+            }
+
+            return pattern;
+        }
 
         public static class DirectMatcher extends StringMatcher {
             protected final String pattern;
@@ -192,6 +225,19 @@ public class ConditionNBT extends CITCondition {
             @Override
             public boolean matches(String value) {
                 return pattern.equals(value);
+            }
+        }
+
+        public static class IDirectMatcher extends StringMatcher {
+            protected final String pattern;
+
+            public IDirectMatcher(String pattern) {
+                this.pattern = pattern;
+            }
+
+            @Override
+            public boolean matches(String value) {
+                return pattern.equalsIgnoreCase(value);
             }
         }
 
