@@ -3,6 +3,7 @@
 ### Fixed
 
 - Fixed texture-only item CITs that use enchantment conditions on Minecraft 26.1.2 by normalizing stack item model ids before generated model lookup.
+- Added compatibility for model-backed item CITs whose model JSON uses OptiFine-style relative texture references such as `./texture_name`.
 
 ## 1.2.2-fork.9+26.1.2
 
