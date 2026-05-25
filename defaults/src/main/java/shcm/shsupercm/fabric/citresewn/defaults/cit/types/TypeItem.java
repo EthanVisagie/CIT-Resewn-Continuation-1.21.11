@@ -190,7 +190,7 @@ public class TypeItem extends CITType {
                     try (var inputStream = resource.get().getInputStream()) {
                         String json = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
                         try {
-                            models.put(this.replacementModelId, JsonUnbakedModel.deserialize(new StringReader(applyReplacementTexture(json))));
+                            models.put(this.replacementModelId, JsonUnbakedModel.deserialize(new StringReader(applyReplacementTexture(json, this.replacementModelResourceId, resourceManager))));
                         } catch (Exception e) {
                             CITResewn.logErrorLoading("Errored while decoding CIT item model " + this.replacementModelResourceId + ": " + e.getMessage());
                         }
@@ -210,7 +210,7 @@ public class TypeItem extends CITType {
                     try (var inputStream = resource.get().getInputStream()) {
                         String json = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
                         try {
-                            models.put(entry.getValue(), JsonUnbakedModel.deserialize(new StringReader(applyReplacementTexture(json))));
+                            models.put(entry.getValue(), JsonUnbakedModel.deserialize(new StringReader(applyReplacementTexture(json, replacementSubModelResourceId, resourceManager))));
                         } catch (Exception e) {
                             CITResewn.logErrorLoading("Errored while decoding CIT item model " + replacementSubModelResourceId + ": " + e.getMessage());
                         }
@@ -238,20 +238,62 @@ public class TypeItem extends CITType {
         return models;
     }
 
-    private String applyReplacementTexture(String json) {
-        if (this.replacementTextureId == null && this.replacementTextures.isEmpty())
-            return json;
-
+    private String applyReplacementTexture(String json, Identifier modelResourceId, ResourceManager resourceManager) {
         JsonObject model = JsonParser.parseString(json).getAsJsonObject();
         JsonObject textures = model.has("textures") && model.get("textures").isJsonObject()
                 ? model.getAsJsonObject("textures")
                 : new JsonObject();
+
+        resolveModelTextureReferences(textures, modelResourceId, resourceManager);
+
         if (this.replacementTextureId != null)
             textures.addProperty("layer0", this.replacementTextureId.toString());
         for (Map.Entry<String, Identifier> entry : this.replacementTextures.entrySet())
             textures.addProperty(entry.getKey(), entry.getValue().toString());
+
+        addDefaultParticleTexture(textures);
+
         model.add("textures", textures);
         return model.toString();
+    }
+
+    private static void resolveModelTextureReferences(JsonObject textures, Identifier modelResourceId, ResourceManager resourceManager) {
+        for (Map.Entry<String, com.google.gson.JsonElement> entry : new ArrayList<>(textures.entrySet())) {
+            if (!entry.getValue().isJsonPrimitive() || !entry.getValue().getAsJsonPrimitive().isString())
+                continue;
+
+            String texture = entry.getValue().getAsString();
+            if (texture.startsWith("#"))
+                continue;
+
+            Identifier resolvedTexture = resolveModelTextureReference(modelResourceId, texture, resourceManager);
+            if (resolvedTexture != null)
+                textures.addProperty(entry.getKey(), asTextureId(resolvedTexture).toString());
+        }
+    }
+
+    private static Identifier resolveModelTextureReference(Identifier modelResourceId, String texture, ResourceManager resourceManager) {
+        try {
+            return resolveAsset(modelResourceId, texture, "textures", ".png", resourceManager);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private static void addDefaultParticleTexture(JsonObject textures) {
+        if (textures.has("particle"))
+            return;
+
+        for (Map.Entry<String, com.google.gson.JsonElement> entry : textures.entrySet()) {
+            if (!entry.getValue().isJsonPrimitive() || !entry.getValue().getAsJsonPrimitive().isString())
+                continue;
+
+            String texture = entry.getValue().getAsString();
+            if (!texture.startsWith("#")) {
+                textures.addProperty("particle", texture);
+                return;
+            }
+        }
     }
 
     public boolean supportsItemModelOverride() {
