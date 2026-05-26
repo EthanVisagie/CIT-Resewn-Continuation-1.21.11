@@ -1,3 +1,9 @@
+## 1.2.2-fork.10+1.21.11
+
+### Fixed
+
+- Fixed compatibility with mods such as Catharsis that provide their own item model ids, so CIT Resewn only applies item CIT model overrides when vanilla is still using the item's default model.
+
 ## 1.2.2-fork.9+1.21.11
 
 ### Fixed
