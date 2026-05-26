@@ -1,3 +1,9 @@
+## 1.2.2-fork.12+26.1.2
+
+### Fixed
+
+- Preserved Catharsis and SkyBlock API item model overrides when CIT item models are evaluated, fixing FurfSky Reborn skyblock textures on Minecraft 26.1.2.
+
 ## 1.2.2-fork.11+26.1.2
 
 ### Fixed
