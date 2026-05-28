@@ -6,7 +6,7 @@ CIT Resewn Continuation is an unofficial community fork of CIT Resewn aimed at k
 
 The main module serves as an API to add types and conditions while the Defaults module provides the standard CIT behavior used by most packs.
 
-Fork repository: https://github.com/EthanVisagie/CIT-Resewn-Continuation
+Fork repository: https://github.com/EthanVisagie/CIT-Resewn-Continuation-1.21.11
 
 ## Status
 
@@ -27,17 +27,17 @@ Tested against TooManyRenamesV19.9 and confirmed working with Fabulously Optimiz
 
 Download release artifacts from the fork repository releases page:
 
-https://github.com/EthanVisagie/CIT-Resewn-Continuation/releases
+https://github.com/EthanVisagie/CIT-Resewn-Continuation-1.21.11/releases
 
 For Minecraft `1.21.11`, install the main jar:
-- `citresewn-continuation-1.2.2-fork.3+1.21.11.jar`
+- [`citresewn-continuation-1.2.2-fork.10+1.21.11.jar`](https://github.com/EthanVisagie/CIT-Resewn-Continuation-1.21.11/releases/download/v1.2.2-fork.10%2B1.21.11/citresewn-continuation-1.2.2-fork.10%2B1.21.11.jar)
 
 The defaults module is bundled inside the main jar as a nested Fabric jar. You do not need to install the defaults jar separately.
 
 ## Installation
 
 1. Install Fabric Loader for Minecraft `1.21.11`.
-2. Put `citresewn-continuation-1.2.2-fork.3+1.21.11.jar` in your `mods` folder.
+2. Put `citresewn-continuation-1.2.2-fork.10+1.21.11.jar` in your `mods` folder.
 3. Launch the game once.
 4. Put any CIT-compatible resource pack in `resourcepacks`.
 5. Enable the resource pack in-game.
