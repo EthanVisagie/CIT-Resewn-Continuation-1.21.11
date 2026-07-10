@@ -24,7 +24,7 @@ public class ChatScreenMixin {
      * If {@link CITResewnCommand#openConfig} is true, changes the screen that's opened when the chat is closed to the config screen.
      * @see CITResewnCommand#openConfig
      */
-    @ModifyArg(method = "keyPressed", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;setScreen(Lnet/minecraft/client/gui/screens/Screen;)V"))
+    @ModifyArg(method = "keyPressed", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/Gui;setScreen(Lnet/minecraft/client/gui/screens/Screen;)V"))
     public Screen citresewn$redirectConfigScreen(Screen original) {
         if (openConfig) {
             openConfig = false;

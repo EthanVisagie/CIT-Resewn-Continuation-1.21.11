@@ -14,15 +14,15 @@ pluginManagement {
 plugins {
     id 'dev.kikugie.stonecutter' version '0.5-beta.3'
 
-    id 'net.fabricmc.fabric-loom' version '1.16.0-alpha.13' apply false
+    id 'net.fabricmc.fabric-loom' version '1.17.13' apply false
     id 'io.shcm.shsupercm.fabric.fletchingtable' version '1.6' apply false
     id 'com.modrinth.minotaur' version '2.+' apply false
     id 'com.matthewprenger.cursegradle' version '1.4.0' apply false
 }
 
 stonecutter.create(rootProject) {
-    versions '26.1.2'
+    versions '26.2'
     branch 'defaults'
 
-    vcsVersion = '26.1.2'
+    vcsVersion = '26.2'
 }

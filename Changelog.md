@@ -1,3 +1,12 @@
+## 1.2.2-fork.13+26.2
+
+### Fixed
+
+- Ported the 26.1.x Fabric release line to Minecraft 26.2.
+- Updated the 26.2 build toolchain to Fabric Loom 1.17.13, Gradle 9.5.1, Fabric Loader 0.19.3, Fabric API 0.154.2+26.2, Mod Menu 20.0.0-beta.4, and Cloth Config 26.2.155.
+- Retargeted the chat config command mixin to the 26.2 `Gui.setScreen` call site.
+- Kept the defaults module bundled inside the main jar.
+
 ## 1.2.2-fork.12+26.1.2
 
 ### Fixed
