@@ -7,7 +7,7 @@ import shcm.shsupercm.fabric.citresewn.defaults.cit.types.TypeItem;
 
 @Mixin(ItemStack.class)
 public class ItemStackMixin implements TypeItem.CITCacheItem {
-    private final CITCache.Single<TypeItem> citresewn$cacheTypeItem = new CITCache.Single<>(TypeItem.CONTAINER::getRealTimeCIT);
+    private final CITCache.Single<TypeItem> citresewn$cacheTypeItem = new TypeItem.ItemCITCache();
 
     @Override
     public CITCache.Single<TypeItem> citresewn$getCacheTypeItem() {

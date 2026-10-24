@@ -33,12 +33,18 @@ public class WeightCondition extends IntegerCondition {
     }
 
     /**
+     * The priority order CITs get tested in: higher weight first, then path/pack name as a tie breaker.
+     * Containers that build their own candidate subsets must sort with this to keep that order.
+     */
+    public static final Comparator<CIT<?>> COMPARATOR =
+            Comparator.<CIT<?>>comparingInt(cit -> cit.weight)
+            .reversed()
+            .thenComparing(cit -> cit.propertiesIdentifier.toString() + cit.packName);
+
+    /**
      * Sorts the given {@link CIT} list by the CITs' weight and then by their path/pack name.
      */
     public static void apply(List<CIT<?>> cits) {
-        cits.sort(
-                Comparator.<CIT<?>>comparingInt(cit -> cit.weight)
-                .reversed()
-                .thenComparing(cit -> cit.propertiesIdentifier.toString() + cit.packName));
+        cits.sort(COMPARATOR);
     }
 }

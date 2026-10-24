@@ -30,6 +30,14 @@ public class CITResewnConfig {
      */
     public int cache_ms = 50;
     /**
+     * Buckets item rules by the exact {@code custom_data} string they require, so a stack only has to be
+     * tested against the few rules that can possibly match it instead of every rule of its item.<br>
+     * Set to {@code false} to go back to testing every rule of the item (pre-1.2.2-fork.11 behaviour), which
+     * is far slower on packs with hundreds of renamed items but needs no index.
+     * Requires a resource reload.
+     */
+    public boolean item_value_index = true;
+    /**
      * Should broken paths be allowed in resourcepacks. Requires a restart.
      * @see BrokenPaths
      */

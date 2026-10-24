@@ -14,18 +14,21 @@ Fork repository: https://github.com/EthanVisagie/CIT-Resewn-Continuation
 
 ## Status
 
-This fork currently targets Minecraft 1.21.11 on Fabric.
+This tree is the **Minecraft 1.21.8 (Fabric)** downport of the fork. Its feature level matches
+`1.2.2-fork.10` (which upstream ships for 1.21.11) on top of the 1.21.8-specific rendering and
+item-asset adaptations.
 
 Current state:
-- base mod and defaults build successfully
+- base mod and defaults build successfully for 1.21.8
 - item model CITs work
 - common texture-only item CITs work
+- sub-item model CITs work (`bow_pulling_*`, `crossbow_*`, `shield_blocking`, `trident_throwing`)
 - armor CITs work
 - elytra CITs work
-- enchantment CITs have a first 1.21.11 implementation
+- enchantment glint CITs work
 
 Testing:
-Tested against TooManyRenamesV19.9 and confirmed working with Fabulously Optimized including Complementary Reimagined shaders.
+Upstream's 1.21.8 branch was validated against TooManyRenamesV19.9 with Fabulously Optimized.
 
 ## Downloads
 
@@ -33,29 +36,30 @@ Download release artifacts from the fork repository releases page:
 
 https://github.com/EthanVisagie/CIT-Resewn-Continuation/releases
 
-For Minecraft `1.21.11`, install the main jar:
-- `citresewn-continuation-1.2.2-fork.3+1.21.11.jar`
+For Minecraft `1.21.8`, install the main jar:
+- `citresewn-continuation-1.2.2-fork.10+1.21.8.jar`
 
 The defaults module is bundled inside the main jar as a nested Fabric jar. You do not need to install the defaults jar separately.
 
 ## Installation
 
-1. Install Fabric Loader for Minecraft `1.21.11`.
-2. Put `citresewn-continuation-1.2.2-fork.3+1.21.11.jar` in your `mods` folder.
+1. Install Fabric Loader for Minecraft `1.21.8`.
+2. Put `citresewn-continuation-1.2.2-fork.10+1.21.8.jar` in your `mods` folder.
 3. Launch the game once.
 4. Put any CIT-compatible resource pack in `resourcepacks`.
 5. Enable the resource pack in-game.
 
 ## Pack Compatibility
 
-This fork is intended to keep existing CIT Resewn and OptiFine-style CIT packs usable on Fabric 1.21.11.
+This fork is intended to keep existing CIT Resewn and OptiFine-style CIT packs usable on Fabric 1.21.8.
 
 Known working areas in this fork:
 - item model CITs
 - common texture-only item CITs
+- sub-item model CITs
 - armor CITs
 - elytra CITs
-- first-pass enchantment glint CITs
+- enchantment glint CITs
 
 Known limits:
 - some edge-case OptiFine CIT properties are still incomplete.
