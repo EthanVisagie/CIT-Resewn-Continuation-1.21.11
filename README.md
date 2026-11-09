@@ -10,7 +10,7 @@ Fork repository: https://github.com/EthanVisagie/CIT-Resewn-Continuation-1.21.11
 
 ## Status
 
-This fork currently targets Minecraft 26.2 on Fabric.
+This fork currently targets Minecraft 26.3 on Fabric.
 
 Current state:
 - base mod and defaults build successfully
@@ -20,32 +20,28 @@ Current state:
 - elytra CITs work
 - enchantment CITs have a first modern implementation
 
-Testing:
-- Tested against TooManyRenamesV19.9 and confirmed working with Fabulously Optimized including Complementary Reimagined shaders.
-- Manually validated the Fabric 26.2 build in the Barely Default display world, covering item models, texture-only CITs, armor CITs, elytra CITs, and resource reload.
-
 ## Downloads
 
 Download release artifacts from the fork repository releases page:
 
 https://github.com/EthanVisagie/CIT-Resewn-Continuation-1.21.11/releases
 
-For Minecraft `26.2`, install the main jar:
-- `citresewn-continuation-1.2.2-fork.13+26.2.jar`
+For Minecraft `26.3`, install the main jar:
+- `citresewn-continuation-1.2.2-fork.14+26.3.jar`
 
 The defaults module is bundled inside the main jar as a nested Fabric jar. You do not need to install the defaults jar separately.
 
 ## Installation
 
-1. Install Fabric Loader for Minecraft `26.2`.
-2. Put `citresewn-continuation-1.2.2-fork.13+26.2.jar` in your `mods` folder.
+1. Install Fabric Loader for Minecraft `26.3`.
+2. Put `citresewn-continuation-1.2.2-fork.14+26.3.jar` in your `mods` folder.
 3. Launch the game once.
 4. Put any CIT-compatible resource pack in `resourcepacks`.
 5. Enable the resource pack in-game.
 
 ## Pack Compatibility
 
-This fork is intended to keep existing CIT Resewn and OptiFine-style CIT packs usable on Fabric 26.2.
+This fork is intended to keep existing CIT Resewn and OptiFine-style CIT packs usable on Fabric 26.3.
 
 Known working areas in this fork:
 - item model CITs
@@ -56,15 +52,6 @@ Known working areas in this fork:
 
 Known limits:
 - some edge-case OptiFine CIT properties are still incomplete.
-
-## Testing
-
-For broader validation, test against:
-- `TooManyRenamesV19.9.zip`
-- Barely Default's display world
-- other enchantment-heavy CIT packs
-
-If you hit a broken model, missing texture, or startup crash, open an issue and include `latest.log` or the crash report.
 
 ## CIT Docs
 

@@ -1,3 +1,11 @@
+## 1.2.2-fork.14+26.3
+
+### Fixed
+
+- Ported the Fabric build to Minecraft 26.3.
+- Updated the 26.3 toolchain to Fabric Loom 1.17.21, Gradle 9.6.0, Fabric Loader 0.20.1, Fabric API 0.165.2+26.3, Mod Menu 21.0.0, and Cloth Config 26.3.159.
+- Updated enchantment item rendering for the 26.3 `ItemQuads` submit API.
+
 ## 1.2.2-fork.13+26.2
 
 ### Fixed
