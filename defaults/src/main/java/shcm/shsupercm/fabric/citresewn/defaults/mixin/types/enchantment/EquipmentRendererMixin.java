@@ -6,9 +6,8 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
 import net.minecraft.client.renderer.entity.layers.EquipmentLayerRenderer;
-import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.rendertype.RenderType;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.renderer.texture.UvMapping;
 import net.minecraft.client.resources.model.EquipmentClientInfo;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
@@ -30,7 +29,7 @@ public class EquipmentRendererMixin {
             method = "renderLayers(Lnet/minecraft/client/resources/model/EquipmentClientInfo$LayerType;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lnet/minecraft/world/item/ItemStack;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;ILnet/minecraft/resources/Identifier;II)V",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/client/renderer/OrderedSubmitNodeCollector;submitModel(Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;IIILnet/minecraft/client/renderer/texture/TextureAtlasSprite;ILnet/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay;)V",
+                    target = "Lnet/minecraft/client/renderer/OrderedSubmitNodeCollector;submitModel(Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;IIILnet/minecraft/client/renderer/texture/UvMapping;I)V",
                     ordinal = 1
             )
     )
@@ -43,9 +42,8 @@ public class EquipmentRendererMixin {
             int light,
             int overlay,
             int color,
-            TextureAtlasSprite sprite,
+            UvMapping uvMapping,
             int batchingIndex,
-            ModelFeatureRenderer.CrumblingOverlay crumblingOverlay,
             Operation<Void> original,
             EquipmentClientInfo.LayerType layerType,
             ResourceKey<?> assetKey,
@@ -60,20 +58,20 @@ public class EquipmentRendererMixin {
             int renderBatchingIndex
     ) {
         if (!CONTAINER.active()) {
-            original.call(queue, model, state, matrices, renderLayer, light, overlay, color, sprite, batchingIndex, crumblingOverlay);
+            original.call(queue, model, state, matrices, renderLayer, light, overlay, color, uvMapping, batchingIndex);
             return;
         }
 
         List<CIT<TypeEnchantment>> enchantments = CONTAINER.getCITs(new CITContext(stack, null, null));
         if (enchantments.isEmpty()) {
-            original.call(queue, model, state, matrices, renderLayer, light, overlay, color, sprite, batchingIndex, crumblingOverlay);
+            original.call(queue, model, state, matrices, renderLayer, light, overlay, color, uvMapping, batchingIndex);
             return;
         }
 
         if (enchantments.stream().anyMatch(cit -> cit.type.useGlint))
-            original.call(queue, model, state, matrices, renderLayer, light, overlay, color, sprite, batchingIndex, crumblingOverlay);
+            original.call(queue, model, state, matrices, renderLayer, light, overlay, color, uvMapping, batchingIndex);
 
         for (CIT<TypeEnchantment> enchantment : enchantments)
-            queue.submitModel((Model) model, state, matrices, enchantment.type.getArmorGlintLayer(), light, overlay, color, sprite, batchingIndex, crumblingOverlay);
+            queue.submitModel((Model) model, state, matrices, enchantment.type.getArmorGlintLayer(), light, overlay, color, null, batchingIndex);
     }
 }

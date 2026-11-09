@@ -4,7 +4,6 @@ import io.shcm.shsupercm.fabric.fletchingtable.api.Entrypoint;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.rendertype.LayeringTransform;
-import net.minecraft.client.renderer.rendertype.OutputTarget;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.TextureTransform;
@@ -123,12 +122,12 @@ public class TypeEnchantment extends CITType {
     public RenderType getItemGlintLayer(boolean translucent) {
         if (translucent) {
             if (this.itemGlintTranslucentLayer == null)
-                this.itemGlintTranslucentLayer = createItemGlintLayer("glint_translucent", OutputTarget.ITEM_ENTITY_TARGET);
+                this.itemGlintTranslucentLayer = createItemGlintLayer("glint_translucent");
             return this.itemGlintTranslucentLayer;
         }
 
         if (this.itemGlintLayer == null)
-            this.itemGlintLayer = createItemGlintLayer("glint", null);
+            this.itemGlintLayer = createItemGlintLayer("glint");
         return this.itemGlintLayer;
     }
 
@@ -144,12 +143,10 @@ public class TypeEnchantment extends CITType {
         return this.armorGlintLayer;
     }
 
-    private RenderType createItemGlintLayer(String kind, OutputTarget outputTarget) {
+    private RenderType createItemGlintLayer(String kind) {
         RenderSetup.RenderSetupBuilder builder = RenderSetup.builder(RenderPipelines.GLINT)
                 .withTexture("Sampler0", this.texture)
                 .setTextureTransform(getItemTextureTransform());
-        if (outputTarget != null)
-            builder.setOutputTarget(outputTarget);
 
         return RenderLayerInvoker.citresewn$of("citresewn_" + kind + "_" + this.texture, builder.createRenderSetup());
     }

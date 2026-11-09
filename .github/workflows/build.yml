@@ -4,12 +4,12 @@ on:
   push:
     branches:
       - main
-      - port/26.2
+      - port/26.3
   pull_request:
   workflow_dispatch:
 
 jobs:
-  build-26-2:
+  build-26-3:
     runs-on: ubuntu-latest
 
     steps:
@@ -31,7 +31,7 @@ jobs:
       - name: Upload jars
         uses: actions/upload-artifact@v4
         with:
-          name: citresewn-continuation-26.2
+          name: citresewn-continuation-26.3
           path: |
-            versions/26.2/build/libs/*.jar
-            defaults/versions/26.2/build/libs/*.jar
+            versions/26.3/build/libs/*.jar
+            defaults/versions/26.3/build/libs/*.jar

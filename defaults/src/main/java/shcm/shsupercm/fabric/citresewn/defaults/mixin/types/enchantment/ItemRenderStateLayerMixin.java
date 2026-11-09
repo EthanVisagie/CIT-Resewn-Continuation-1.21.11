@@ -12,7 +12,7 @@ import shcm.shsupercm.fabric.citresewn.defaults.cit.types.TypeEnchantment;
 
 import java.util.List;
 import net.minecraft.client.renderer.SubmitNodeCollector;
-import net.minecraft.client.resources.model.geometry.BakedQuad;
+import net.minecraft.client.resources.model.geometry.ItemQuads;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.world.item.ItemDisplayContext;
 
@@ -24,7 +24,7 @@ public class ItemRenderStateLayerMixin {
             method = "submit",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/client/renderer/SubmitNodeCollector;submitItem(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/world/item/ItemDisplayContext;III[ILjava/util/List;Lnet/minecraft/client/renderer/item/ItemStackRenderState$FoilType;)V"
+                    target = "Lnet/minecraft/client/renderer/SubmitNodeCollector;submitItem(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/world/item/ItemDisplayContext;III[ILnet/minecraft/client/resources/model/geometry/ItemQuads;Lnet/minecraft/client/renderer/item/ItemStackRenderState$FoilType;)V"
             )
     )
     private void citresewn$submitEnchantmentGlint(
@@ -35,7 +35,7 @@ public class ItemRenderStateLayerMixin {
             int overlay,
             int batchingIndex,
             int[] tints,
-            List<BakedQuad> quads,
+            ItemQuads quads,
             ItemStackRenderState.FoilType glint,
             Operation<Void> original
     ) {

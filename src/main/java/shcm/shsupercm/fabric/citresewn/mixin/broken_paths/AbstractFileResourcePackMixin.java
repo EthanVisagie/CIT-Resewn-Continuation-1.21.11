@@ -1,7 +1,7 @@
 package shcm.shsupercm.fabric.citresewn.mixin.broken_paths;
 
 import net.minecraft.IdentifierException;
-import net.minecraft.server.packs.AbstractPackResources;
+import net.minecraft.server.packs.AbstractPackMetadataResources;
 import net.minecraft.server.packs.PackResources;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.metadata.MetadataSectionType;
@@ -19,7 +19,7 @@ import shcm.shsupercm.fabric.citresewn.config.BrokenPaths;
  * @see BrokenPaths
  * @see ResourcePackCompatibilityMixin
  */
-@Mixin(AbstractPackResources.class)
+@Mixin(AbstractPackMetadataResources.class)
 public abstract class AbstractFileResourcePackMixin implements PackResources {
 
     @SuppressWarnings({"unchecked"})
