@@ -1,6 +1,11 @@
 package shcm.shsupercm.fabric.citresewn.defaults.cit.types;
 
 import io.shcm.shsupercm.fabric.fletchingtable.api.Entrypoint;
+import com.mojang.renderpearl.api.pipeline.BlendFactor;
+import com.mojang.renderpearl.api.pipeline.BlendFunction;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.ShaderType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.rendertype.LayeringTransform;
@@ -27,9 +32,11 @@ import shcm.shsupercm.fabric.citresewn.pack.format.PropertyValue;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
-import java.util.WeakHashMap;
 
 public class TypeEnchantment extends CITType {
     @Entrypoint(CITGlobalProperties.ENTRYPOINT)
@@ -48,6 +55,10 @@ public class TypeEnchantment extends CITType {
     private RenderType armorGlintLayer;
     private TextureTransform itemTextureTransform;
     private TextureTransform armorTextureTransform;
+    private BlendFunction blendFunction = BlendFunction.GLINT;
+    private String blendName = "glint";
+
+    private static final Map<String, RenderPipeline> BLEND_PIPELINES = new HashMap<>();
 
     @Override
     public Set<PropertyKey> typeProperties() {
@@ -112,7 +123,14 @@ public class TypeEnchantment extends CITType {
             throw new CITParsingException("Duration must be greater than 0", properties, duration == null ? -1 : duration.position());
 
         warnIfPresent(properties, "blur", "blur is not ported to 1.21.11 yet");
-        warnIfPresent(properties, "blend", "blend is not ported to 1.21.11 yet");
+        PropertyValue blend = properties.getLastWithoutMetadata("citresewn", "blend");
+        if (blend != null)
+            try {
+                this.blendName = blend.value().toLowerCase(Locale.ROOT);
+                this.blendFunction = parseBlendFunction(blend.value());
+            } catch (IllegalArgumentException e) {
+                throw new CITParsingException("Could not parse blending method", properties, blend.position(), e);
+            }
         warnIfPresent(properties, "r", "custom glint colors are not ported to 1.21.11 yet");
         warnIfPresent(properties, "g", "custom glint colors are not ported to 1.21.11 yet");
         warnIfPresent(properties, "b", "custom glint colors are not ported to 1.21.11 yet");
@@ -133,10 +151,11 @@ public class TypeEnchantment extends CITType {
 
     public RenderType getArmorGlintLayer() {
         if (this.armorGlintLayer == null) {
-            RenderSetup.RenderSetupBuilder builder = RenderSetup.builder(RenderPipelines.GLINT)
+            RenderSetup.RenderSetupBuilder builder = RenderSetup.builder(getRenderPipeline())
                     .withTexture("Sampler0", this.texture)
                     .setTextureTransform(getArmorTextureTransform())
-                    .setLayeringTransform(LayeringTransform.VIEW_OFFSET_Z_LAYERING);
+                    .setLayeringTransform(LayeringTransform.VIEW_OFFSET_Z_LAYERING)
+                    .withForcedSolidModelPhase();
             this.armorGlintLayer = RenderLayerInvoker.citresewn$of("citresewn_armor_glint_" + this.texture, builder.createRenderSetup());
         }
 
@@ -144,7 +163,7 @@ public class TypeEnchantment extends CITType {
     }
 
     private RenderType createItemGlintLayer(String kind) {
-        RenderSetup.RenderSetupBuilder builder = RenderSetup.builder(RenderPipelines.GLINT)
+        RenderSetup.RenderSetupBuilder builder = RenderSetup.builder(getRenderPipeline())
                 .withTexture("Sampler0", this.texture)
                 .setTextureTransform(getItemTextureTransform());
 
@@ -161,6 +180,69 @@ public class TypeEnchantment extends CITType {
         if (this.armorTextureTransform == null)
             this.armorTextureTransform = createTextureTransform("citresewn_armor_glint_texturing_" + this.texture, 8.0f);
         return this.armorTextureTransform;
+    }
+
+    private RenderPipeline getRenderPipeline() {
+        if (this.blendFunction == BlendFunction.GLINT)
+            return RenderPipelines.GLINT;
+
+        synchronized (BLEND_PIPELINES) {
+            return BLEND_PIPELINES.computeIfAbsent(this.blendName, name -> {
+                String pipelineName = name.replaceAll("[^a-z0-9_-]", "_");
+                RenderPipeline glint = RenderPipelines.GLINT;
+                RenderPipeline.Builder builder = RenderPipeline.builder()
+                        .withLocation(Identifier.fromNamespaceAndPath("citresewn", "enchantment/" + pipelineName))
+                        .withVertexShader(glint.getShaders().get(ShaderType.VERTEX))
+                        .withFragmentShader(glint.getShaders().get(ShaderType.FRAGMENT))
+                        .withVertexBinding(0, glint.getVertexFormatBinding(0))
+                        .withPrimitiveTopology(glint.getPrimitiveTopology())
+                        .withCull(glint.isCull())
+                        .withDepthStencilState(glint.getDepthStencilState())
+                        .withColorTargetState(this.blendFunction == null ? ColorTargetState.DEFAULT : new ColorTargetState(this.blendFunction));
+                glint.getBindGroupLayouts().forEach(builder::withBindGroupLayout);
+                return builder.build();
+            });
+        }
+    }
+
+    private static BlendFunction parseBlendFunction(String value) {
+        return switch (value.toLowerCase(Locale.ROOT)) {
+            case "replace" -> null;
+            case "glint" -> BlendFunction.GLINT;
+            case "alpha" -> BlendFunction.TRANSLUCENT;
+            case "add" -> BlendFunction.ADDITIVE;
+            case "overlay" -> BlendFunction.OVERLAY;
+            case "subtract" -> blend(BlendFactor.ONE_MINUS_DST_COLOR, BlendFactor.ZERO);
+            case "multiply" -> blend(BlendFactor.DST_COLOR, BlendFactor.ONE_MINUS_SRC_ALPHA);
+            case "dodge" -> blend(BlendFactor.ONE, BlendFactor.ONE);
+            case "burn" -> blend(BlendFactor.ZERO, BlendFactor.ONE_MINUS_SRC_COLOR);
+            case "screen" -> blend(BlendFactor.ONE, BlendFactor.ONE_MINUS_SRC_COLOR);
+            default -> parseCustomBlend(value);
+        };
+    }
+
+    private static BlendFunction parseCustomBlend(String value) {
+        String[] factors = value.trim().split("\\p{Zs}+");
+        if (factors.length != 2 && factors.length != 4)
+            throw new IllegalArgumentException("Expected two or four blend factors");
+
+        BlendFactor colorSource = parseBlendFactor(factors[0]);
+        BlendFactor colorDestination = parseBlendFactor(factors[1]);
+        if (factors.length == 2)
+            return blend(colorSource, colorDestination);
+
+        return new BlendFunction(colorSource, colorDestination, parseBlendFactor(factors[2]), parseBlendFactor(factors[3]));
+    }
+
+    private static BlendFunction blend(BlendFactor colorSource, BlendFactor colorDestination) {
+        return new BlendFunction(colorSource, colorDestination, BlendFactor.ZERO, BlendFactor.ONE);
+    }
+
+    private static BlendFactor parseBlendFactor(String value) {
+        String normalized = value.toUpperCase(Locale.ROOT);
+        if (normalized.startsWith("GL_"))
+            normalized = normalized.substring(3);
+        return BlendFactor.valueOf(normalized);
     }
 
     private TextureTransform createTextureTransform(String name, float scale) {

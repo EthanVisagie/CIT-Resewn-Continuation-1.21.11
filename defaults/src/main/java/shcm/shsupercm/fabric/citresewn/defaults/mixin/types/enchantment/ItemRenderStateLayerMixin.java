@@ -3,6 +3,8 @@ package shcm.shsupercm.fabric.citresewn.defaults.mixin.types.enchantment;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.model.geom.builders.UVPair;
+import net.minecraft.client.resources.model.geometry.BakedQuad;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -47,8 +49,18 @@ public class ItemRenderStateLayerMixin {
 
         boolean keepVanillaGlint = glint != ItemStackRenderState.FoilType.NONE && enchantments.stream().anyMatch(cit -> cit.type.useGlint);
         original.call(commandQueue, matrices, displayContext, light, overlay, batchingIndex, tints, quads, keepVanillaGlint ? glint : ItemStackRenderState.FoilType.NONE);
-
-        for (CIT<TypeEnchantment> enchantment : enchantments)
-            commandQueue.submitItem(matrices, displayContext, light, overlay, batchingIndex, tints, quads, ItemStackRenderState.FoilType.NONE);
+        if (displayContext == ItemDisplayContext.GUI) {
+            int order = 1;
+            for (CIT<TypeEnchantment> cit : enchantments) {
+                commandQueue.order(order++).submitCustomGeometry(matrices, cit.type.getItemGlintLayer(false), (pose, vertices) -> {
+                    for (BakedQuad quad : quads.all()) {
+                        for (int i = 0; i < 4; i++) {
+                            long uv = quad.packedUV(i);
+                            vertices.addVertex(pose, quad.position(i)).setUv(UVPair.unpackU(uv), UVPair.unpackV(uv));
+                        }
+                    }
+                });
+            }
+        }
     }
 }

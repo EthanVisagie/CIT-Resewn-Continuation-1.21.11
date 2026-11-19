@@ -7,6 +7,7 @@ Compatibility release for Minecraft 26.3 on Fabric.
 - Ported the Fabric build from Minecraft 26.2 to 26.3.
 - Updated the Fabric Loader, Fabric API, Mod Menu, Cloth Config, Loom, and Gradle targets for 26.3.
 - Updated enchantment item rendering for the 26.3 `ItemQuads` submit API.
+- Restored legacy enchantment CIT blend modes, including alpha blending for custom armor glints.
 
 ## Install
 

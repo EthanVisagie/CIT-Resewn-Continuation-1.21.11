@@ -27,5 +27,10 @@ public class ItemRenderStateMixin implements TypeEnchantment.CITEnchantmentRende
     @Override
     public void citresewn$setTypeEnchantments(List<CIT<TypeEnchantment>> enchantments) {
         this.citresewn$typeEnchantments = enchantments;
+        if (!enchantments.isEmpty()) {
+            ItemStackRenderState state = (ItemStackRenderState) (Object) this;
+            state.appendModelIdentityElement(enchantments);
+            state.setAnimated();
+        }
     }
 }
