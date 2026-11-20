@@ -87,7 +87,11 @@ public class TypeItem extends CITType {
                 continue;
 
             String keyMetadata = propertyValue.keyMetadata();
-            if (!keyMetadata.equals("trident_throwing")) {
+            if (!keyMetadata.equals("trident_throwing")
+                    && !keyMetadata.equals("bow")
+                    && !keyMetadata.equals("bow_pulling_0")
+                    && !keyMetadata.equals("bow_pulling_1")
+                    && !keyMetadata.equals("bow_pulling_2")) {
                 warn("Sub-item model override is not ported to 1.21.11 yet", propertyValue, properties);
                 continue;
             }
@@ -271,7 +275,9 @@ public class TypeItem extends CITType {
     }
 
     public boolean supportsItemModelOverride() {
-        return this.generatedItemModelId != null || !this.generatedTextureModelIds.isEmpty();
+        return this.generatedItemModelId != null
+                || !this.generatedSubItemModelIds.isEmpty()
+                || !this.generatedTextureModelIds.isEmpty();
     }
 
     public boolean warnedTextureOnly() {
@@ -280,10 +286,20 @@ public class TypeItem extends CITType {
 
     public Identifier getGeneratedItemModelId(ItemStack stack, LivingEntity entity) {
         if (entity != null && entity.isUsingItem() && ItemStack.matches(entity.getUseItem(), stack)) {
-            Identifier generatedSubItemModelId = this.generatedSubItemModelIds.get("trident_throwing");
+            String subModel = null;
+            if (stack.is(net.minecraft.world.item.Items.BOW)) {
+                int useTicks = entity.getTicksUsingItem();
+                subModel = useTicks >= 18 ? "bow_pulling_2" : useTicks >= 13 ? "bow_pulling_1" : "bow_pulling_0";
+            } else if (this.generatedSubItemModelIds.containsKey("trident_throwing")) {
+                subModel = "trident_throwing";
+            }
+            Identifier generatedSubItemModelId = subModel == null ? null : this.generatedSubItemModelIds.get(subModel);
             if (generatedSubItemModelId != null)
                 return generatedSubItemModelId;
         }
+
+        if (this.generatedSubItemModelIds.containsKey("bow"))
+            return this.generatedSubItemModelIds.get("bow");
 
         if (this.generatedItemModelId != null)
             return this.generatedItemModelId;
