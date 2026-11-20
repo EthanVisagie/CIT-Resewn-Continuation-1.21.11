@@ -29,8 +29,10 @@ public class BakedModelManagerMixin {
         List<CIT<TypeItem>> loadedSnapshot = new ArrayList<>(CONTAINER.loaded);
         cir.setReturnValue(cir.getReturnValue().thenApply(models -> {
             Map<Identifier, UnbakedModel> syntheticModels = new HashMap<>(models);
+            Map<Identifier, UnbakedModel> relativeParents = new HashMap<>();
             for (CIT<TypeItem> cit : loadedSnapshot)
-                syntheticModels.putAll(cit.type.createUnbakedModels(resourceManager));
+                syntheticModels.putAll(cit.type.createUnbakedModels(resourceManager, relativeParents));
+            relativeParents.forEach(syntheticModels::putIfAbsent);
             return syntheticModels;
         }));
     }

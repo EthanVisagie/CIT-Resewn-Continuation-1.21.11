@@ -2,6 +2,7 @@ package shcm.shsupercm.fabric.citresewn.defaults.cit.types;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 import io.shcm.shsupercm.fabric.fletchingtable.api.Entrypoint;
 import shcm.shsupercm.fabric.citresewn.CITResewn;
 import shcm.shsupercm.fabric.citresewn.api.CITTypeContainer;
@@ -171,6 +172,13 @@ public class TypeItem extends CITType {
     }
 
     public Map<Identifier, UnbakedModel> createUnbakedModels(ResourceManager resourceManager) {
+        Map<Identifier, UnbakedModel> parents = new LinkedHashMap<>();
+        Map<Identifier, UnbakedModel> models = createUnbakedModels(resourceManager, parents);
+        parents.forEach(models::putIfAbsent);
+        return models;
+    }
+
+    public Map<Identifier, UnbakedModel> createUnbakedModels(ResourceManager resourceManager, Map<Identifier, UnbakedModel> relativeParents) {
         Map<Identifier, UnbakedModel> models = new LinkedHashMap<>();
 
         if (this.replacementModelId != null && this.replacementModelResourceId != null)
@@ -179,7 +187,7 @@ public class TypeItem extends CITType {
                 if (resource.isPresent())
                     try (var inputStream = resource.get().open()) {
                         String json = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-                        models.put(this.replacementModelId, CuboidModel.fromStream(new StringReader(applyReplacementTexture(json, this.replacementModelResourceId, resourceManager))));
+                        models.put(this.replacementModelId, CuboidModel.fromStream(new StringReader(applyReplacementTexture(json, this.replacementModelResourceId, resourceManager, relativeParents))));
                     }
             } catch (IOException | RuntimeException e) {
                 CITResewn.logErrorLoading("Errored while loading CIT item model " + this.replacementModelResourceId + ": " + e.getMessage());
@@ -195,7 +203,7 @@ public class TypeItem extends CITType {
                 if (resource.isPresent())
                     try (var inputStream = resource.get().open()) {
                         String json = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-                        models.put(entry.getValue(), CuboidModel.fromStream(new StringReader(applyReplacementTexture(json, replacementSubModelResourceId, resourceManager))));
+                        models.put(entry.getValue(), CuboidModel.fromStream(new StringReader(applyReplacementTexture(json, replacementSubModelResourceId, resourceManager, relativeParents))));
                     }
             } catch (IOException | RuntimeException e) {
                 CITResewn.logErrorLoading("Errored while loading CIT item model " + replacementSubModelResourceId + ": " + e.getMessage());
@@ -216,8 +224,16 @@ public class TypeItem extends CITType {
         return models;
     }
 
-    private String applyReplacementTexture(String json, Identifier modelResourceId, ResourceManager resourceManager) {
+    private String applyReplacementTexture(String json, Identifier modelResourceId, ResourceManager resourceManager,
+                                           Map<Identifier, UnbakedModel> relativeParents) {
         JsonObject model = JsonParser.parseString(json).getAsJsonObject();
+        var originalParent = model.get("parent");
+        try {
+            resolveRelativeParents(model, modelResourceId, resourceManager, relativeParents);
+        } catch (IOException | RuntimeException e) {
+            model.add("parent", originalParent);
+            CITResewn.logWarnLoading("Could not resolve relative parent for " + modelResourceId + ": " + e.getMessage());
+        }
         JsonObject textures = model.has("textures") && model.get("textures").isJsonObject()
                 ? model.getAsJsonObject("textures")
                 : new JsonObject();
@@ -233,6 +249,38 @@ public class TypeItem extends CITType {
 
         model.add("textures", textures);
         return model.toString();
+    }
+
+    private static void resolveRelativeParents(JsonObject model, Identifier resourceId, ResourceManager resources,
+                                               Map<Identifier, UnbakedModel> parents) throws IOException {
+        Map<Identifier, JsonObject> pending = new LinkedHashMap<>();
+        while (model.get("parent") instanceof JsonPrimitive parent && parent.isString()) {
+            String path = parent.getAsString();
+            if (!path.startsWith("./") && !path.startsWith("../"))
+                break;
+            Identifier target = resolveAsset(resourceId, path, "models", ".json", resources);
+            if (target == null)
+                break;
+            Identifier alias = Identifier.fromNamespaceAndPath("citresewn", "relative_parent/" + target.getNamespace() + "/" + target.getPath());
+            if (pending.containsKey(alias))
+                throw new IOException("Circular relative model parent " + target);
+            model.addProperty("parent", alias.toString());
+            if (parents.containsKey(alias))
+                break;
+            try (var reader = resources.getResourceOrThrow(target).openAsReader()) {
+                model = JsonParser.parseReader(reader).getAsJsonObject();
+            }
+            if (model.get("textures") instanceof JsonObject textures)
+                resolveModelTextureReferences(textures, target, resources);
+            pending.put(alias, model);
+            resourceId = target;
+        }
+        if (!pending.isEmpty()) {
+            Map<Identifier, UnbakedModel> decoded = new LinkedHashMap<>();
+            for (var entry : pending.entrySet())
+                decoded.put(entry.getKey(), CuboidModel.fromStream(new StringReader(entry.getValue().toString())));
+            parents.putAll(decoded);
+        }
     }
 
     private static void resolveModelTextureReferences(JsonObject textures, Identifier modelResourceId, ResourceManager resourceManager) {
