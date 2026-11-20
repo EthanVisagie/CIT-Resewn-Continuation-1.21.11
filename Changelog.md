@@ -1,11 +1,14 @@
 ## 1.2.2-fork.14+26.3
 
-### Fixed
+### What's New and Fixed
 
-- Ported the Fabric build to Minecraft 26.3.
-- Updated the 26.3 toolchain to Fabric Loom 1.17.21, Gradle 9.6.0, Fabric Loader 0.20.1, Fabric API 0.165.2+26.3, Mod Menu 21.0.0, and Cloth Config 26.3.159.
-- Updated enchantment item rendering for the 26.3 `ItemQuads` submit API.
-- Restored legacy enchantment CIT blend modes, including alpha blending for custom armor glints.
+* Ported CIT Resewn Continuation to Minecraft 26.3 on Fabric (Fabric Loader 0.20.1, Fabric API 0.165.2+26.3, Mod Menu 21.0.0, and Cloth Config 26.3.159).
+* Restored custom enchantment glints on items and worn armor, including legacy blend modes.
+* Added animation and state support for custom bows, crossbows (drawing, loaded arrow, and loaded firework), and blocking shields.
+* Fixed relative model parents so custom models display and align properly in hands and item frames.
+* Improved compatibility with older OptiFine CIT packs, including legacy texture paths, custom subfolders, uppercase or spaced filenames, older vanilla item and texture names, mislabeled JPEG textures, and models that mix vanilla item textures with custom CIT textures.
+* Handled minor JSON formatting mistakes and out of bounds texture coordinates (including missing face UVs) that previously turned custom models into purple and black cubes.
+* Isolated broken item models during resource reload so one bad model does not break the rest of a pack.
 
 ## 1.2.2-fork.13+26.2
 
