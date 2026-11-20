@@ -2,8 +2,8 @@ package shcm.shsupercm.fabric.citresewn.pack;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 import net.minecraft.client.renderer.texture.atlas.SpriteSource;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.PackResources;
@@ -15,6 +15,8 @@ import net.minecraft.server.packs.resources.ResourceMetadata;
 import shcm.shsupercm.fabric.citresewn.CITResewn;
 import shcm.shsupercm.fabric.citresewn.cit.CITType;
 import shcm.shsupercm.fabric.citresewn.mixin.PathPackResourcesAccessor;
+import shcm.shsupercm.fabric.citresewn.pack.format.PropertyGroup;
+import shcm.shsupercm.fabric.citresewn.pack.format.PropertyValue;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -24,10 +26,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -54,6 +59,7 @@ public final class CitCompatTextures {
         final ResourceManager resourceManager;
         final List<PackResources> reversedPacks;
         private final Map<String, Optional<Resolution>> resolved = new HashMap<>();
+        private final Map<String, Optional<RawLookup>> rawLookups = new HashMap<>();
 
         public Cache(ResourceManager resourceManager) {
             this.resourceManager = resourceManager;
@@ -68,6 +74,14 @@ public final class CitCompatTextures {
 
         void put(String key, Optional<Resolution> value) {
             resolved.put(key, value);
+        }
+
+        Optional<RawLookup> getRaw(String key) {
+            return rawLookups.get(key);
+        }
+
+        void putRaw(String key, Optional<RawLookup> value) {
+            rawLookups.put(key, value);
         }
     }
 
@@ -85,35 +99,84 @@ public final class CitCompatTextures {
     }
 
     /**
-     * Scans CIT model JSONs and stitches any referenced textures that vanilla atlases do not
-     * include by default (root textures, custom subfolders, legacy plural {@code blocks/}/{@code items/},
-     * and non-standard-path textures aliased under {@code citresewn:compat_tex/...}).
+     * Scans CIT model JSONs (including models referenced by CIT {@code .properties} outside
+     * {@code /cit/} and their relative parent chains) and stitches any referenced textures that
+     * vanilla atlases do not include by default.
      */
     public static void addCitModelSprites(ResourceManager resourceManager, boolean itemsAtlas, SpriteSource.Output regions) {
         Cache cache = new Cache(resourceManager);
         Set<Identifier> stitched = new HashSet<>();
+        Map<Identifier, Resource> modelResources = new LinkedHashMap<>();
+        Deque<Identifier> queue = new ArrayDeque<>();
+        Set<Identifier> enqueued = new HashSet<>();
 
         for (String root : PackParser.ROOTS) {
             for (var model : resourceManager.listResources(root + "/cit", path -> path.getPath().endsWith(".json")).entrySet()) {
-                try (Reader reader = model.getValue().openAsReader()) {
-                    JsonElement json = JsonParser.parseReader(reader);
-                    if (!(json instanceof JsonObject object) || !(object.get("textures") instanceof JsonObject textures))
+                modelResources.put(model.getKey(), model.getValue());
+                if (enqueued.add(model.getKey()))
+                    queue.add(model.getKey());
+            }
+
+            for (var prop : resourceManager.listResources(root + "/cit", path -> path.getPath().endsWith(".properties")).entrySet()) {
+                try (InputStream in = prop.getValue().open()) {
+                    PropertyGroup group = PropertyGroup.tryParseGroup(prop.getValue().sourcePackId(), prop.getKey(), in);
+                    if (group == null)
+                        continue;
+                    for (PropertyValue modelProp : group.get("citresewn", "model")) {
+                        Identifier resolvedModel = CITType.resolveAsset(prop.getKey(), modelProp, "models", ".json", resourceManager);
+                        if (resolvedModel != null && enqueued.add(resolvedModel)) {
+                            resourceManager.getResource(resolvedModel).ifPresent(res -> {
+                                modelResources.put(resolvedModel, res);
+                                queue.add(resolvedModel);
+                            });
+                        }
+                    }
+                } catch (IOException | RuntimeException ignored) {
+                    // CIT parsing logs malformed .properties files during PackParser.parseCITs.
+                }
+            }
+        }
+
+        while (!queue.isEmpty()) {
+            Identifier modelId = queue.poll();
+            Resource resource = modelResources.get(modelId);
+            if (resource == null)
+                continue;
+
+            try (Reader reader = resource.openAsReader()) {
+                JsonElement json = JsonParser.parseReader(reader);
+                if (!(json instanceof JsonObject object))
+                    continue;
+
+                if (object.get("parent") instanceof JsonPrimitive parent && parent.isString()) {
+                    String parentPath = parent.getAsString();
+                    if (parentPath.startsWith("./") || parentPath.startsWith("../")) {
+                        Identifier target = CITType.resolveAsset(modelId, parentPath, "models", ".json", resourceManager);
+                        if (target != null && enqueued.add(target)) {
+                            resourceManager.getResource(target).ifPresent(res -> {
+                                modelResources.put(target, res);
+                                queue.add(target);
+                            });
+                        }
+                    }
+                }
+
+                if (!(object.get("textures") instanceof JsonObject textures))
+                    continue;
+
+                for (JsonElement value : textures.asMap().values()) {
+                    if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString())
                         continue;
 
-                    for (JsonElement value : textures.asMap().values()) {
-                        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString())
-                            continue;
+                    Resolution resolved = resolve(modelId, value.getAsString(), cache, true);
+                    if (resolved == null || resolved.atlasResource() == null || resolved.itemAtlas() != itemsAtlas)
+                        continue;
 
-                        Resolution resolved = resolve(model.getKey(), value.getAsString(), cache, true);
-                        if (resolved == null || resolved.atlasResource() == null || resolved.itemAtlas() != itemsAtlas)
-                            continue;
-
-                        if (stitched.add(resolved.spriteId()))
-                            regions.add(resolved.spriteId(), CitSpriteResource.allowJpeg(resolved.spriteId(), resolved.atlasResource()));
-                    }
-                } catch (IOException | JsonParseException e) {
-                    CITResewn.logWarnLoading("Could not read model textures from " + model.getKey() + ": " + e.getMessage());
+                    if (stitched.add(resolved.spriteId()))
+                        regions.add(resolved.spriteId(), CitSpriteResource.allowJpeg(resolved.spriteId(), resolved.atlasResource()));
                 }
+            } catch (IOException | RuntimeException e) {
+                CITResewn.logWarnLoading("Could not read model textures from " + modelId + ": " + e.getMessage());
             }
         }
     }
@@ -124,9 +187,9 @@ public final class CitCompatTextures {
 
         String normalized = rawTexture.replace('\\', '/');
         boolean isRelative = normalized.startsWith("./") || normalized.startsWith("../");
-        String cacheKey = isRelative
-                ? modelResourceId.getNamespace() + ":" + parentDir(modelResourceId.getPath()) + "|" + normalized + "|" + needResource
-                : normalized + "|" + needResource;
+        // Always scope by model directory because CITType.resolveAsset falls back to the model's folder
+        // even for bare texture names without ./ or ../.
+        String cacheKey = modelResourceId.getNamespace() + ":" + parentDir(modelResourceId.getPath()) + "|" + normalized + "|" + needResource;
 
         Optional<Resolution> cached = cache.get(cacheKey);
         if (cached != null)
@@ -239,7 +302,7 @@ public final class CitCompatTextures {
         }
 
         for (String candidate : candidatePaths) {
-            RawLookup lookup = findRawAsset(cache.reversedPacks, namespace, candidate);
+            RawLookup lookup = findRawAsset(cache, namespace, candidate);
             if (lookup != null) {
                 Identifier compatId = compatSpriteId(namespace, lookup.matchedPath());
                 boolean itemAtlas = !isRelative && (stripped.startsWith("item/") || stripped.startsWith("items/"));
@@ -251,7 +314,18 @@ public final class CitCompatTextures {
         return null;
     }
 
-    private static RawLookup findRawAsset(List<PackResources> reversedPacks, String namespace, String relativeAssetPath) {
+    private static RawLookup findRawAsset(Cache cache, String namespace, String relativeAssetPath) {
+        String rawKey = namespace + ":" + relativeAssetPath;
+        Optional<RawLookup> cached = cache.getRaw(rawKey);
+        if (cached != null)
+            return cached.orElse(null);
+
+        RawLookup found = findRawAssetUncached(cache.reversedPacks, namespace, relativeAssetPath);
+        cache.putRaw(rawKey, Optional.ofNullable(found));
+        return found;
+    }
+
+    private static RawLookup findRawAssetUncached(List<PackResources> reversedPacks, String namespace, String relativeAssetPath) {
         String[] segments = buildSafeAssetSegments(namespace, relativeAssetPath);
         if (segments == null)
             return null;
@@ -271,17 +345,21 @@ public final class CitCompatTextures {
 
     private static IoSupplier<InputStream> openRawFromPack(PackResources pack, String[] segments) {
         if (pack instanceof PathPackResources pathPack) {
-            Path root = ((PathPackResourcesAccessor) pathPack).citresewn$getRoot();
-            if (root == null)
+            try {
+                Path root = ((PathPackResourcesAccessor) pathPack).citresewn$getRoot();
+                if (root == null)
+                    return null;
+                Path normalizedRoot = root.normalize();
+                Path resolved = normalizedRoot;
+                for (String segment : segments)
+                    resolved = resolved.resolve(segment);
+                resolved = resolved.normalize();
+                if (!resolved.startsWith(normalizedRoot) || !Files.isRegularFile(resolved))
+                    return null;
+                return IoSupplier.create(resolved);
+            } catch (RuntimeException ignored) {
                 return null;
-            Path normalizedRoot = root.normalize();
-            Path resolved = normalizedRoot;
-            for (String segment : segments)
-                resolved = resolved.resolve(segment);
-            resolved = resolved.normalize();
-            if (!resolved.startsWith(normalizedRoot) || !Files.isRegularFile(resolved))
-                return null;
-            return IoSupplier.create(resolved);
+            }
         }
 
         try {

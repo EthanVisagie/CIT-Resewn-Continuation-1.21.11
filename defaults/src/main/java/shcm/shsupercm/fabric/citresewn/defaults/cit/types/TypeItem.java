@@ -275,14 +275,16 @@ public class TypeItem extends CITType {
             if (target == null)
                 break;
             Identifier alias = Identifier.fromNamespaceAndPath("citresewn", "relative_parent/" + target.getNamespace() + "/" + target.getPath());
-            if (!visited.add(target) || pending.containsKey(alias)) {
+            if (target.equals(resourceId)) {
                 if (model.get("elements") instanceof JsonArray elements && !elements.isEmpty()) {
                     model.remove("parent");
-                    CITResewn.logWarnLoading("Ignoring circular relative parent " + path + " in " + resourceId);
+                    CITResewn.logWarnLoading("Ignoring self-referential relative parent " + path + " in " + resourceId);
                     break;
                 }
                 throw new IOException("Circular relative model parent " + target);
             }
+            if (!visited.add(target) || pending.containsKey(alias))
+                throw new IOException("Circular relative model parent " + target);
             model.addProperty("parent", alias.toString());
             if (parents.containsKey(alias))
                 break;
