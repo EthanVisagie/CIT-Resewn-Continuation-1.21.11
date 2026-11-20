@@ -29,7 +29,7 @@ public class ItemAssetsLoaderMixin {
         cir.setReturnValue(cir.getReturnValue().thenApply(result -> {
             Map<Identifier, ClientItem> contents = new HashMap<>(result.contents());
             for (CIT<TypeItem> cit : loadedSnapshot)
-                contents.putAll(cit.type.createItemAssets());
+                contents.putAll(cit.type.createItemAssets(resourceManager));
             return new ClientItemInfoLoader.LoadedClientInfos(contents);
         }));
     }

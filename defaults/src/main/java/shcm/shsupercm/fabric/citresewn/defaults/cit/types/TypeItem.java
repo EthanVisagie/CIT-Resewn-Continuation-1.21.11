@@ -149,10 +149,10 @@ public class TypeItem extends CITType {
         }
     }
 
-    public Map<Identifier, ClientItem> createItemAssets() {
+    public Map<Identifier, ClientItem> createItemAssets(ResourceManager resourceManager) {
         Map<Identifier, ClientItem> itemAssets = new LinkedHashMap<>();
         if (this.replacementModelId != null && this.generatedItemModelId != null)
-            itemAssets.put(this.generatedItemModelId, new ClientItem(new CuboidItemModelWrapper.Unbaked(this.replacementModelId, Optional.empty(), List.of()), ClientItem.Properties.DEFAULT));
+            itemAssets.put(this.generatedItemModelId, new ClientItem(HeldModelOverrides.load(this.replacementModelId, this.replacementModelResourceId, resourceManager), ClientItem.Properties.DEFAULT));
 
         for (Map.Entry<String, Identifier> entry : this.generatedSubItemModelIds.entrySet()) {
             Identifier replacementSubModelId = this.replacementSubModelIds.get(entry.getKey());
