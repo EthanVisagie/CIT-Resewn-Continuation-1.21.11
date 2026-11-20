@@ -3,7 +3,6 @@ package shcm.shsupercm.fabric.citresewn.defaults.cit.types;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
 import io.shcm.shsupercm.fabric.fletchingtable.api.Entrypoint;
 import shcm.shsupercm.fabric.citresewn.CITResewn;
@@ -233,7 +232,7 @@ public class TypeItem extends CITType {
 
     private String applyReplacementTexture(String json, Identifier modelResourceId, ResourceManager resourceManager,
                                            Map<Identifier, UnbakedModel> relativeParents, CitCompatTextures.Cache textureCache) {
-        JsonObject model = JsonParser.parseString(json).getAsJsonObject();
+        JsonObject model = CitCompatTextures.parseLenientJsonObject(json);
         var originalParent = model.get("parent");
         try {
             resolveRelativeParents(model, modelResourceId, resourceManager, relativeParents, textureCache);
@@ -256,6 +255,7 @@ public class TypeItem extends CITType {
             textures.addProperty(entry.getKey(), entry.getValue().toString());
 
         addDefaultParticleTexture(textures);
+        CitCompatTextures.promoteMixedItemAtlasTextures(textures);
 
         model.add("textures", textures);
         clampOutOfBoundsUvs(model);
@@ -269,7 +269,7 @@ public class TypeItem extends CITType {
         visited.add(resourceId);
         while (model.get("parent") instanceof JsonPrimitive parent && parent.isString()) {
             String path = parent.getAsString();
-            if (!path.startsWith("./") && !path.startsWith("../"))
+            if (!CitCompatTextures.isCitModelParent(path))
                 break;
             Identifier target = resolveAsset(resourceId, path, "models", ".json", resources);
             if (target == null)
@@ -289,10 +289,12 @@ public class TypeItem extends CITType {
             if (parents.containsKey(alias))
                 break;
             try (var reader = resources.getResourceOrThrow(target).openAsReader()) {
-                model = JsonParser.parseReader(reader).getAsJsonObject();
+                model = CitCompatTextures.parseLenientJsonObject(reader);
             }
-            if (model.get("textures") instanceof JsonObject textures)
+            if (model.get("textures") instanceof JsonObject textures) {
                 resolveModelTextureReferences(textures, target, textureCache);
+                CitCompatTextures.promoteMixedItemAtlasTextures(textures);
+            }
             clampOutOfBoundsUvs(model);
             pending.put(alias, model);
             resourceId = target;

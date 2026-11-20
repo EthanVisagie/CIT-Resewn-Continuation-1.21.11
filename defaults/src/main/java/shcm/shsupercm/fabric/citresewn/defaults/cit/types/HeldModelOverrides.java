@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
+import com.google.gson.Strictness;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import net.minecraft.client.renderer.item.CuboidItemModelWrapper;
@@ -28,6 +29,7 @@ final class HeldModelOverrides {
     static ItemModel.Unbaked load(Identifier baseId, Identifier file, ResourceManager resources) {
         ItemModel.Unbaked base = model(baseId);
         try (var reader = new JsonReader(resources.openAsReader(file))) {
+            reader.setStrictness(Strictness.LENIENT);
             // Geometry can dominate these files. Only materialize the legacy override list.
             if (reader.peek() != JsonToken.BEGIN_OBJECT)
                 return base;

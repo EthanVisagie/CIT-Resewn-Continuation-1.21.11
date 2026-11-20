@@ -2,8 +2,11 @@ package shcm.shsupercm.fabric.citresewn.pack;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
+import com.google.gson.Strictness;
+import com.google.gson.stream.JsonReader;
 import net.minecraft.client.renderer.texture.atlas.SpriteSource;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.PackResources;
@@ -21,6 +24,7 @@ import shcm.shsupercm.fabric.citresewn.pack.format.PropertyValue;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
+import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -55,6 +59,43 @@ public final class CitCompatTextures {
 
     private CitCompatTextures() {}
 
+    /**
+     * Parses a CIT model JSON leniently (matching pre-1.21/OptiFine Gson behavior for trailing
+     * braces, trailing commas, and comments) and returns the root {@link JsonObject}.
+     */
+    public static JsonObject parseLenientJsonObject(Reader reader) {
+        JsonReader jsonReader = new JsonReader(reader);
+        jsonReader.setStrictness(Strictness.LENIENT);
+        JsonElement element = JsonParser.parseReader(jsonReader);
+        if (!(element instanceof JsonObject object))
+            throw new JsonParseException("Expected JSON object");
+        return object;
+    }
+
+    public static JsonObject parseLenientJsonObject(String json) {
+        return parseLenientJsonObject(new StringReader(json));
+    }
+
+    /**
+     * Returns true when a model's {@code "parent"} points to a relative path ({@code ./} or {@code ../})
+     * or directly inside a CIT root ({@code optifine/cit/}, {@code mcpatcher/cit/}, {@code citresewn/cit/})
+     * that vanilla's {@code models/} loader does not index.
+     */
+    public static boolean isCitModelParent(String parentPath) {
+        if (parentPath == null || parentPath.isEmpty())
+            return false;
+        String normalized = parentPath.replace('\\', '/');
+        if (normalized.startsWith("./") || normalized.startsWith("../"))
+            return true;
+        int colon = normalized.indexOf(':');
+        String path = colon >= 0 ? normalized.substring(colon + 1) : normalized;
+        for (String root : PackParser.ROOTS) {
+            if (path.startsWith(root + "/cit/"))
+                return true;
+        }
+        return false;
+    }
+
     public static final class Cache {
         final ResourceManager resourceManager;
         final List<PackResources> reversedPacks;
@@ -85,9 +126,11 @@ public final class CitCompatTextures {
         }
     }
 
-    private record Resolution(Identifier spriteId, Resource atlasResource, boolean itemAtlas) {}
+    private record Resolution(Identifier spriteId, Resource atlasResource, boolean itemAtlas, boolean extraStitch) {}
 
     private record RawLookup(PackResources pack, IoSupplier<InputStream> stream, IoSupplier<InputStream> metadata, String matchedPath) {}
+
+    private record ScannedModel(Identifier parentId, List<Resolution> textures) {}
 
     /**
      * Resolves a texture reference from a CIT model JSON to a valid sprite {@link Identifier}.
@@ -100,8 +143,9 @@ public final class CitCompatTextures {
 
     /**
      * Scans CIT model JSONs (including models referenced by CIT {@code .properties} outside
-     * {@code /cit/} and their relative parent chains) and stitches any referenced textures that
-     * vanilla atlases do not include by default.
+     * {@code /cit/} and their CIT/relative parent chains) and stitches any referenced textures that
+     * vanilla atlases do not include by default—plus CIT sprites used alongside {@code item/*}
+     * textures so mixed models resolve cleanly from the {@code items} atlas on 26.3.
      */
     public static void addCitModelSprites(ResourceManager resourceManager, boolean itemsAtlas, SpriteSource.Output regions) {
         Cache cache = new Cache(resourceManager);
@@ -137,6 +181,8 @@ public final class CitCompatTextures {
             }
         }
 
+        Map<Identifier, ScannedModel> scannedModels = itemsAtlas ? new LinkedHashMap<>() : null;
+
         while (!queue.isEmpty()) {
             Identifier modelId = queue.poll();
             Resource resource = modelResources.get(modelId);
@@ -144,41 +190,131 @@ public final class CitCompatTextures {
                 continue;
 
             try (Reader reader = resource.openAsReader()) {
-                JsonElement json = JsonParser.parseReader(reader);
-                if (!(json instanceof JsonObject object))
-                    continue;
+                JsonObject object = parseLenientJsonObject(reader);
 
+                Identifier parentId = null;
                 if (object.get("parent") instanceof JsonPrimitive parent && parent.isString()) {
                     String parentPath = parent.getAsString();
-                    if (parentPath.startsWith("./") || parentPath.startsWith("../")) {
+                    if (isCitModelParent(parentPath)) {
                         Identifier target = CITType.resolveAsset(modelId, parentPath, "models", ".json", resourceManager);
-                        if (target != null && enqueued.add(target)) {
-                            resourceManager.getResource(target).ifPresent(res -> {
-                                modelResources.put(target, res);
-                                queue.add(target);
-                            });
+                        if (target != null) {
+                            parentId = target;
+                            if (enqueued.add(target)) {
+                                resourceManager.getResource(target).ifPresent(res -> {
+                                    modelResources.put(target, res);
+                                    queue.add(target);
+                                });
+                            }
                         }
                     }
                 }
 
-                if (!(object.get("textures") instanceof JsonObject textures))
-                    continue;
+                List<Resolution> modelTextures = itemsAtlas ? new ArrayList<>() : null;
+                if (object.get("textures") instanceof JsonObject textures) {
+                    for (JsonElement value : textures.asMap().values()) {
+                        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString())
+                            continue;
 
-                for (JsonElement value : textures.asMap().values()) {
-                    if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString())
-                        continue;
+                        Resolution resolved = resolve(modelId, value.getAsString(), cache, true);
+                        if (resolved == null)
+                            continue;
 
-                    Resolution resolved = resolve(modelId, value.getAsString(), cache, true);
-                    if (resolved == null || resolved.atlasResource() == null || resolved.itemAtlas() != itemsAtlas)
-                        continue;
+                        if (modelTextures != null)
+                            modelTextures.add(resolved);
 
-                    if (stitched.add(resolved.spriteId()))
-                        regions.add(resolved.spriteId(), CitSpriteResource.allowJpeg(resolved.spriteId(), resolved.atlasResource()));
+                        if (resolved.extraStitch() && resolved.atlasResource() != null && resolved.itemAtlas() == itemsAtlas) {
+                            if (stitched.add(resolved.spriteId()))
+                                regions.add(resolved.spriteId(), CitSpriteResource.allowJpeg(resolved.spriteId(), resolved.atlasResource()));
+                        }
+                    }
                 }
+
+                if (scannedModels != null)
+                    scannedModels.put(modelId, new ScannedModel(parentId, modelTextures));
             } catch (IOException | RuntimeException e) {
                 CITResewn.logWarnLoading("Could not read model textures from " + modelId + ": " + e.getMessage());
             }
         }
+
+        // Promote CIT/compat sprites into the items atlas under a dedicated citresewn:item_atlas/...
+        // alias when a model combines them with item/* textures (and no block/* textures), preventing
+        // 26.3's "Multiple atlases used in model" bake error without hijacking blocks-atlas models
+        // that share the same texture file.
+        if (itemsAtlas && scannedModels != null) {
+            for (Identifier modelId : scannedModels.keySet()) {
+                boolean hasItemSprite = false;
+                boolean hasBlockSprite = false;
+                List<Resolution> promotable = new ArrayList<>();
+
+                Set<Identifier> chainVisited = new HashSet<>();
+                Identifier current = modelId;
+                while (current != null && chainVisited.add(current)) {
+                    ScannedModel info = scannedModels.get(current);
+                    if (info == null)
+                        break;
+                    for (Resolution res : info.textures()) {
+                        String path = res.spriteId().getPath();
+                        if (isVanillaItemPath(path)) {
+                            hasItemSprite = true;
+                        } else if (isVanillaBlockPath(path)) {
+                            hasBlockSprite = true;
+                        } else if (!res.itemAtlas() && res.atlasResource() != null && isPromotableCitPath(res.spriteId())) {
+                            promotable.add(res);
+                        }
+                    }
+                    current = info.parentId();
+                }
+
+                if (hasItemSprite && !hasBlockSprite) {
+                    for (Resolution res : promotable) {
+                        Identifier alias = itemAtlasAlias(res.spriteId());
+                        if (stitched.add(alias))
+                            regions.add(alias, CitSpriteResource.allowJpeg(alias, res.atlasResource()));
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Rewrites promotable CIT/compat textures inside a resolved model (whose textures have already
+     * been normalized) to their dedicated {@code citresewn:item_atlas/...} aliases when the model
+     * mixes {@code item/*} textures with CIT textures and uses no {@code block/*} textures.
+     */
+    public static void promoteMixedItemAtlasTextures(JsonObject textures) {
+        boolean hasItemSprite = false;
+        boolean hasBlockSprite = false;
+        for (JsonElement value : textures.asMap().values()) {
+            if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString())
+                continue;
+            String tex = value.getAsString();
+            if (tex.startsWith("#"))
+                continue;
+            Identifier id = Identifier.tryParse(tex);
+            if (id == null)
+                continue;
+            if (isVanillaItemPath(id.getPath()))
+                hasItemSprite = true;
+            else if (isVanillaBlockPath(id.getPath()))
+                hasBlockSprite = true;
+        }
+        if (!hasItemSprite || hasBlockSprite)
+            return;
+
+        for (Map.Entry<String, JsonElement> entry : new ArrayList<>(textures.entrySet())) {
+            if (!entry.getValue().isJsonPrimitive() || !entry.getValue().getAsJsonPrimitive().isString())
+                continue;
+            String tex = entry.getValue().getAsString();
+            if (tex.startsWith("#"))
+                continue;
+            Identifier id = Identifier.tryParse(tex);
+            if (id != null && isPromotableCitPath(id))
+                textures.addProperty(entry.getKey(), itemAtlasAlias(id).toString());
+        }
+    }
+
+    public static Identifier itemAtlasAlias(Identifier spriteId) {
+        return Identifier.fromNamespaceAndPath("citresewn", "item_atlas/" + spriteId.getNamespace() + "/" + spriteId.getPath());
     }
 
     private static Resolution resolve(Identifier modelResourceId, String rawTexture, Cache cache, boolean needResource) {
@@ -209,13 +345,11 @@ public final class CitCompatTextures {
             if (standard != null) {
                 Identifier spriteId = asTextureId(standard);
                 if (!needResource)
-                    return new Resolution(spriteId, null, false);
-                if (needsExtraAtlasStitching(spriteId)) {
-                    Optional<Resource> res = resourceManager.getResource(standard);
-                    if (res.isPresent())
-                        return new Resolution(spriteId, res.get(), isItemAtlasSprite(spriteId.getPath()));
-                }
-                return new Resolution(spriteId, null, false);
+                    return new Resolution(spriteId, null, false, false);
+                boolean extra = needsExtraAtlasStitching(spriteId);
+                boolean promotableCit = isCitRootSprite(spriteId.getPath());
+                Resource res = (extra || promotableCit) ? resourceManager.getResource(standard).orElse(null) : null;
+                return new Resolution(spriteId, res, isItemAtlasSprite(spriteId.getPath()), extra);
             }
         } catch (RuntimeException ignored) {
             // Fall through to legacy/non-standard compatibility paths.
@@ -254,13 +388,13 @@ public final class CitCompatTextures {
                 Identifier pluralPng = Identifier.fromNamespaceAndPath(namespace, "textures/" + pluralSpritePath + ".png");
                 Optional<Resource> res = resourceManager.getResource(pluralPng);
                 if (res.isPresent())
-                    return new Resolution(Identifier.fromNamespaceAndPath(namespace, pluralSpritePath), needResource ? res.get() : null, false);
+                    return new Resolution(Identifier.fromNamespaceAndPath(namespace, pluralSpritePath), needResource ? res.get() : null, false, true);
             } else if (stripped.startsWith("item/")) {
                 String pluralSpritePath = "items/" + stripped.substring("item/".length());
                 Identifier pluralPng = Identifier.fromNamespaceAndPath(namespace, "textures/" + pluralSpritePath + ".png");
                 Optional<Resource> res = resourceManager.getResource(pluralPng);
                 if (res.isPresent())
-                    return new Resolution(Identifier.fromNamespaceAndPath(namespace, pluralSpritePath), needResource ? res.get() : null, true);
+                    return new Resolution(Identifier.fromNamespaceAndPath(namespace, pluralSpritePath), needResource ? res.get() : null, true, true);
             }
 
             // 2b. Legacy vanilla texture renames (e.g. block/chain -> block/iron_chain).
@@ -269,7 +403,7 @@ public final class CitCompatTextures {
                 if (renamed != null) {
                     Identifier renamedPng = Identifier.fromNamespaceAndPath("minecraft", "textures/" + renamed + ".png");
                     if (resourceManager.getResource(renamedPng).isPresent())
-                        return new Resolution(Identifier.fromNamespaceAndPath("minecraft", renamed), null, renamed.startsWith("item/"));
+                        return new Resolution(Identifier.fromNamespaceAndPath("minecraft", renamed), null, renamed.startsWith("item/"), false);
                 }
             }
 
@@ -277,11 +411,11 @@ public final class CitCompatTextures {
             if (!stripped.contains("/")) {
                 Identifier blockPng = Identifier.fromNamespaceAndPath(namespace, "textures/block/" + stripped + ".png");
                 if (resourceManager.getResource(blockPng).isPresent())
-                    return new Resolution(Identifier.fromNamespaceAndPath(namespace, "block/" + stripped), null, false);
+                    return new Resolution(Identifier.fromNamespaceAndPath(namespace, "block/" + stripped), null, false, false);
 
                 Identifier itemPng = Identifier.fromNamespaceAndPath(namespace, "textures/item/" + stripped + ".png");
                 if (resourceManager.getResource(itemPng).isPresent())
-                    return new Resolution(Identifier.fromNamespaceAndPath(namespace, "item/" + stripped), null, true);
+                    return new Resolution(Identifier.fromNamespaceAndPath(namespace, "item/" + stripped), null, true, false);
             }
 
             return null;
@@ -307,7 +441,7 @@ public final class CitCompatTextures {
                 Identifier compatId = compatSpriteId(namespace, lookup.matchedPath());
                 boolean itemAtlas = !isRelative && (stripped.startsWith("item/") || stripped.startsWith("items/"));
                 Resource resource = needResource ? toResource(lookup) : null;
-                return new Resolution(compatId, resource, itemAtlas);
+                return new Resolution(compatId, resource, itemAtlas, true);
             }
         }
 
@@ -440,19 +574,36 @@ public final class CitCompatTextures {
         return Identifier.fromNamespaceAndPath(resourceIdentifier.getNamespace(), path);
     }
 
+    private static boolean isCitRootSprite(String path) {
+        for (String root : PackParser.ROOTS) {
+            if (path.startsWith(root + "/cit/"))
+                return true;
+        }
+        return false;
+    }
+
+    private static boolean isVanillaItemPath(String path) {
+        return !path.contains("/") || path.startsWith("item/") || path.startsWith("items/");
+    }
+
+    private static boolean isVanillaBlockPath(String path) {
+        return path.startsWith("block/") || path.startsWith("blocks/");
+    }
+
+    private static boolean isPromotableCitPath(Identifier spriteId) {
+        return isCitRootSprite(spriteId.getPath())
+                || (spriteId.getNamespace().equals("citresewn") && spriteId.getPath().startsWith("compat_tex/"));
+    }
+
     private static boolean needsExtraAtlasStitching(Identifier spriteId) {
         String path = spriteId.getPath();
         if (path.startsWith("block/") || path.startsWith("item/"))
             return false;
-        for (String root : PackParser.ROOTS) {
-            if (path.startsWith(root + "/cit/"))
-                return false;
-        }
-        return true;
+        return !isCitRootSprite(path);
     }
 
     private static boolean isItemAtlasSprite(String spritePath) {
-        return !spritePath.contains("/") || spritePath.startsWith("item/") || spritePath.startsWith("items/");
+        return isVanillaItemPath(spritePath);
     }
 
     private static Identifier compatSpriteId(String namespace, String matchedPath) {
