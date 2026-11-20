@@ -25,6 +25,7 @@ import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -344,26 +345,93 @@ public class TypeItem extends CITType {
             if (!(elementNode instanceof JsonObject element) || !(element.get("faces") instanceof JsonObject faces))
                 continue;
 
-            for (JsonElement faceNode : faces.asMap().values()) {
-                if (!(faceNode instanceof JsonObject face) || !(face.get("uv") instanceof JsonArray uv) || uv.size() != 4)
+            double[] from = null;
+            double[] to = null;
+            boolean parsedBounds = false;
+
+            for (Map.Entry<String, JsonElement> faceEntry : faces.entrySet()) {
+                if (!(faceEntry.getValue() instanceof JsonObject face))
                     continue;
 
-                for (int i = 0; i < 4; i++) {
-                    JsonElement coord = uv.get(i);
-                    if (!coord.isJsonPrimitive() || !coord.getAsJsonPrimitive().isNumber())
-                        continue;
+                JsonElement uvNode = face.get("uv");
+                if (uvNode instanceof JsonArray uv && uv.size() == 4) {
+                    for (int i = 0; i < 4; i++) {
+                        JsonElement coord = uv.get(i);
+                        if (!coord.isJsonPrimitive() || !coord.getAsJsonPrimitive().isNumber())
+                            continue;
 
-                    double value = coord.getAsDouble();
-                    if (!Double.isFinite(value))
-                        continue;
+                        double value = coord.getAsDouble();
+                        if (!Double.isFinite(value))
+                            continue;
 
-                    if (value < 0.0)
-                        uv.set(i, new JsonPrimitive(0.0));
-                    else if (value > 16.0)
-                        uv.set(i, new JsonPrimitive(16.0));
+                        if (value < 0.0)
+                            uv.set(i, new JsonPrimitive(0.0));
+                        else if (value > 16.0)
+                            uv.set(i, new JsonPrimitive(16.0));
+                    }
+                    continue;
                 }
+
+                if (uvNode != null && !uvNode.isJsonNull())
+                    continue;
+
+                if (!parsedBounds) {
+                    from = readVec3(element.get("from"));
+                    to = readVec3(element.get("to"));
+                    parsedBounds = true;
+                }
+                if (from == null || to == null)
+                    continue;
+
+                double[] defaultUv = defaultFaceUv(from, to, faceEntry.getKey());
+                if (defaultUv == null)
+                    continue;
+
+                boolean outOfBounds = false;
+                for (double value : defaultUv) {
+                    if (value < 0.0 || value > 16.0) {
+                        outOfBounds = true;
+                        break;
+                    }
+                }
+                if (!outOfBounds)
+                    continue;
+
+                JsonArray clampedUv = new JsonArray(4);
+                for (double value : defaultUv)
+                    clampedUv.add(Math.max(0.0, Math.min(16.0, value)));
+                face.add("uv", clampedUv);
             }
         }
+    }
+
+    private static double[] readVec3(JsonElement node) {
+        if (!(node instanceof JsonArray array) || array.size() != 3)
+            return null;
+
+        double[] vec = new double[3];
+        for (int i = 0; i < 3; i++) {
+            JsonElement coord = array.get(i);
+            if (!coord.isJsonPrimitive() || !coord.getAsJsonPrimitive().isNumber())
+                return null;
+            double value = coord.getAsDouble();
+            if (!Double.isFinite(value))
+                return null;
+            vec[i] = value;
+        }
+        return vec;
+    }
+
+    private static double[] defaultFaceUv(double[] from, double[] to, String faceName) {
+        return switch (faceName.toLowerCase(Locale.ROOT)) {
+            case "down" -> new double[]{from[0], 16.0 - to[2], to[0], 16.0 - from[2]};
+            case "up" -> new double[]{from[0], from[2], to[0], to[2]};
+            case "north" -> new double[]{16.0 - to[0], 16.0 - to[1], 16.0 - from[0], 16.0 - from[1]};
+            case "south" -> new double[]{from[0], 16.0 - to[1], to[0], 16.0 - from[1]};
+            case "west" -> new double[]{from[2], 16.0 - to[1], to[2], 16.0 - from[1]};
+            case "east" -> new double[]{16.0 - to[2], 16.0 - to[1], 16.0 - from[2], 16.0 - from[1]};
+            default -> null;
+        };
     }
 
     private static void addDefaultParticleTexture(JsonObject textures) {
