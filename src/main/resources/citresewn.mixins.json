@@ -9,6 +9,7 @@
     "AtlasPreparationMixin",
     "ChatScreenMixin",
     "ModelLoaderMixin",
+    "PathPackResourcesAccessor",
     "ResourceFinderMixin",
     "broken_paths.AbstractFileResourcePackMixin",
     "broken_paths.IdentifierMixin",

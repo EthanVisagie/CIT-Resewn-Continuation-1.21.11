@@ -6,6 +6,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import shcm.shsupercm.fabric.citresewn.cit.CIT;
 import shcm.shsupercm.fabric.citresewn.defaults.cit.types.TypeItem;
+import shcm.shsupercm.fabric.citresewn.pack.CitCompatTextures;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -30,8 +31,9 @@ public class BakedModelManagerMixin {
         cir.setReturnValue(cir.getReturnValue().thenApply(models -> {
             Map<Identifier, UnbakedModel> syntheticModels = new HashMap<>(models);
             Map<Identifier, UnbakedModel> relativeParents = new HashMap<>();
+            CitCompatTextures.Cache textureCache = new CitCompatTextures.Cache(resourceManager);
             for (CIT<TypeItem> cit : loadedSnapshot)
-                syntheticModels.putAll(cit.type.createUnbakedModels(resourceManager, relativeParents));
+                syntheticModels.putAll(cit.type.createUnbakedModels(resourceManager, relativeParents, textureCache));
             relativeParents.forEach(syntheticModels::putIfAbsent);
             return syntheticModels;
         }));

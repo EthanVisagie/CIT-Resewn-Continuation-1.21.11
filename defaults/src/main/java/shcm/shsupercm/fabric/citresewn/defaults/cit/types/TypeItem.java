@@ -1,5 +1,7 @@
 package shcm.shsupercm.fabric.citresewn.defaults.cit.types;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
@@ -13,6 +15,7 @@ import shcm.shsupercm.fabric.citresewn.cit.CITContext;
 import shcm.shsupercm.fabric.citresewn.cit.CITParsingException;
 import shcm.shsupercm.fabric.citresewn.cit.CITType;
 import shcm.shsupercm.fabric.citresewn.defaults.cit.conditions.ConditionItems;
+import shcm.shsupercm.fabric.citresewn.pack.CitCompatTextures;
 import shcm.shsupercm.fabric.citresewn.pack.format.PropertyGroup;
 import shcm.shsupercm.fabric.citresewn.pack.format.PropertyKey;
 import shcm.shsupercm.fabric.citresewn.pack.format.PropertyValue;
@@ -72,7 +75,7 @@ public class TypeItem extends CITType {
 
         if (this.items.isEmpty())
             try {
-                Identifier propertiesName = Identifier.tryParse(properties.stripName());
+                Identifier propertiesName = ConditionItems.resolveLegacyItemId(Identifier.tryParse(properties.stripName()));
                 if (!BuiltInRegistries.ITEM.containsKey(propertiesName))
                     throw new Exception();
                 Item item = BuiltInRegistries.ITEM.getValue(propertiesName);
@@ -173,12 +176,16 @@ public class TypeItem extends CITType {
 
     public Map<Identifier, UnbakedModel> createUnbakedModels(ResourceManager resourceManager) {
         Map<Identifier, UnbakedModel> parents = new LinkedHashMap<>();
-        Map<Identifier, UnbakedModel> models = createUnbakedModels(resourceManager, parents);
+        Map<Identifier, UnbakedModel> models = createUnbakedModels(resourceManager, parents, new CitCompatTextures.Cache(resourceManager));
         parents.forEach(models::putIfAbsent);
         return models;
     }
 
     public Map<Identifier, UnbakedModel> createUnbakedModels(ResourceManager resourceManager, Map<Identifier, UnbakedModel> relativeParents) {
+        return createUnbakedModels(resourceManager, relativeParents, new CitCompatTextures.Cache(resourceManager));
+    }
+
+    public Map<Identifier, UnbakedModel> createUnbakedModels(ResourceManager resourceManager, Map<Identifier, UnbakedModel> relativeParents, CitCompatTextures.Cache textureCache) {
         Map<Identifier, UnbakedModel> models = new LinkedHashMap<>();
 
         if (this.replacementModelId != null && this.replacementModelResourceId != null)
@@ -187,7 +194,7 @@ public class TypeItem extends CITType {
                 if (resource.isPresent())
                     try (var inputStream = resource.get().open()) {
                         String json = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-                        models.put(this.replacementModelId, CuboidModel.fromStream(new StringReader(applyReplacementTexture(json, this.replacementModelResourceId, resourceManager, relativeParents))));
+                        models.put(this.replacementModelId, CuboidModel.fromStream(new StringReader(applyReplacementTexture(json, this.replacementModelResourceId, resourceManager, relativeParents, textureCache))));
                     }
             } catch (IOException | RuntimeException e) {
                 CITResewn.logErrorLoading("Errored while loading CIT item model " + this.replacementModelResourceId + ": " + e.getMessage());
@@ -203,7 +210,7 @@ public class TypeItem extends CITType {
                 if (resource.isPresent())
                     try (var inputStream = resource.get().open()) {
                         String json = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-                        models.put(entry.getValue(), CuboidModel.fromStream(new StringReader(applyReplacementTexture(json, replacementSubModelResourceId, resourceManager, relativeParents))));
+                        models.put(entry.getValue(), CuboidModel.fromStream(new StringReader(applyReplacementTexture(json, replacementSubModelResourceId, resourceManager, relativeParents, textureCache))));
                     }
             } catch (IOException | RuntimeException e) {
                 CITResewn.logErrorLoading("Errored while loading CIT item model " + replacementSubModelResourceId + ": " + e.getMessage());
@@ -225,20 +232,23 @@ public class TypeItem extends CITType {
     }
 
     private String applyReplacementTexture(String json, Identifier modelResourceId, ResourceManager resourceManager,
-                                           Map<Identifier, UnbakedModel> relativeParents) {
+                                           Map<Identifier, UnbakedModel> relativeParents, CitCompatTextures.Cache textureCache) {
         JsonObject model = JsonParser.parseString(json).getAsJsonObject();
         var originalParent = model.get("parent");
         try {
-            resolveRelativeParents(model, modelResourceId, resourceManager, relativeParents);
+            resolveRelativeParents(model, modelResourceId, resourceManager, relativeParents, textureCache);
         } catch (IOException | RuntimeException e) {
-            model.add("parent", originalParent);
+            if (originalParent != null)
+                model.add("parent", originalParent);
+            else
+                model.remove("parent");
             CITResewn.logWarnLoading("Could not resolve relative parent for " + modelResourceId + ": " + e.getMessage());
         }
         JsonObject textures = model.has("textures") && model.get("textures").isJsonObject()
                 ? model.getAsJsonObject("textures")
                 : new JsonObject();
 
-        resolveModelTextureReferences(textures, modelResourceId, resourceManager);
+        resolveModelTextureReferences(textures, modelResourceId, textureCache);
 
         if (this.replacementTextureId != null)
             textures.addProperty("layer0", this.replacementTextureId.toString());
@@ -248,12 +258,15 @@ public class TypeItem extends CITType {
         addDefaultParticleTexture(textures);
 
         model.add("textures", textures);
+        clampOutOfBoundsUvs(model);
         return model.toString();
     }
 
     private static void resolveRelativeParents(JsonObject model, Identifier resourceId, ResourceManager resources,
-                                               Map<Identifier, UnbakedModel> parents) throws IOException {
+                                               Map<Identifier, UnbakedModel> parents, CitCompatTextures.Cache textureCache) throws IOException {
         Map<Identifier, JsonObject> pending = new LinkedHashMap<>();
+        Set<Identifier> visited = new HashSet<>();
+        visited.add(resourceId);
         while (model.get("parent") instanceof JsonPrimitive parent && parent.isString()) {
             String path = parent.getAsString();
             if (!path.startsWith("./") && !path.startsWith("../"))
@@ -262,8 +275,14 @@ public class TypeItem extends CITType {
             if (target == null)
                 break;
             Identifier alias = Identifier.fromNamespaceAndPath("citresewn", "relative_parent/" + target.getNamespace() + "/" + target.getPath());
-            if (pending.containsKey(alias))
+            if (!visited.add(target) || pending.containsKey(alias)) {
+                if (model.get("elements") instanceof JsonArray elements && !elements.isEmpty()) {
+                    model.remove("parent");
+                    CITResewn.logWarnLoading("Ignoring circular relative parent " + path + " in " + resourceId);
+                    break;
+                }
                 throw new IOException("Circular relative model parent " + target);
+            }
             model.addProperty("parent", alias.toString());
             if (parents.containsKey(alias))
                 break;
@@ -271,7 +290,8 @@ public class TypeItem extends CITType {
                 model = JsonParser.parseReader(reader).getAsJsonObject();
             }
             if (model.get("textures") instanceof JsonObject textures)
-                resolveModelTextureReferences(textures, target, resources);
+                resolveModelTextureReferences(textures, target, textureCache);
+            clampOutOfBoundsUvs(model);
             pending.put(alias, model);
             resourceId = target;
         }
@@ -283,8 +303,8 @@ public class TypeItem extends CITType {
         }
     }
 
-    private static void resolveModelTextureReferences(JsonObject textures, Identifier modelResourceId, ResourceManager resourceManager) {
-        for (Map.Entry<String, com.google.gson.JsonElement> entry : new ArrayList<>(textures.entrySet())) {
+    private static void resolveModelTextureReferences(JsonObject textures, Identifier modelResourceId, CitCompatTextures.Cache textureCache) {
+        for (Map.Entry<String, JsonElement> entry : new ArrayList<>(textures.entrySet())) {
             if (!entry.getValue().isJsonPrimitive() || !entry.getValue().getAsJsonPrimitive().isString())
                 continue;
 
@@ -292,17 +312,39 @@ public class TypeItem extends CITType {
             if (texture.startsWith("#"))
                 continue;
 
-            Identifier resolvedTexture = resolveModelTextureReference(modelResourceId, texture, resourceManager);
+            Identifier resolvedTexture = CitCompatTextures.resolveModelTexture(modelResourceId, texture, textureCache);
             if (resolvedTexture != null)
-                textures.addProperty(entry.getKey(), asTextureId(resolvedTexture).toString());
+                textures.addProperty(entry.getKey(), resolvedTexture.toString());
         }
     }
 
-    private static Identifier resolveModelTextureReference(Identifier modelResourceId, String texture, ResourceManager resourceManager) {
-        try {
-            return resolveAsset(modelResourceId, texture, "textures", ".png", resourceManager);
-        } catch (RuntimeException ignored) {
-            return null;
+    private static void clampOutOfBoundsUvs(JsonObject model) {
+        if (!(model.get("elements") instanceof JsonArray elements))
+            return;
+
+        for (JsonElement elementNode : elements) {
+            if (!(elementNode instanceof JsonObject element) || !(element.get("faces") instanceof JsonObject faces))
+                continue;
+
+            for (JsonElement faceNode : faces.asMap().values()) {
+                if (!(faceNode instanceof JsonObject face) || !(face.get("uv") instanceof JsonArray uv) || uv.size() != 4)
+                    continue;
+
+                for (int i = 0; i < 4; i++) {
+                    JsonElement coord = uv.get(i);
+                    if (!coord.isJsonPrimitive() || !coord.getAsJsonPrimitive().isNumber())
+                        continue;
+
+                    double value = coord.getAsDouble();
+                    if (!Double.isFinite(value))
+                        continue;
+
+                    if (value < 0.0)
+                        uv.set(i, new JsonPrimitive(0.0));
+                    else if (value > 16.0)
+                        uv.set(i, new JsonPrimitive(16.0));
+                }
+            }
         }
     }
 
