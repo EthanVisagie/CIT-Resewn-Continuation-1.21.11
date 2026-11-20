@@ -103,15 +103,17 @@ public class TypeItem extends CITType {
 
         PropertyValue textureProp = properties.getLastWithoutMetadata("citresewn", "texture", "tile");
 
-        if (textureProp != null) {
+        var textureProperties = properties.get("citresewn", "texture", "tile");
+        boolean implicitTexture = textureProperties.isEmpty() && properties.get("citresewn", "model").isEmpty();
+        if (textureProp != null || implicitTexture) {
             Identifier resolvedTexture = resolveAsset(properties.identifier, textureProp, "textures", ".png", resourceManager);
-            if (resolvedTexture == null)
+            if (resolvedTexture != null)
+                this.replacementTextureId = asTextureId(resolvedTexture);
+            else if (textureProp != null)
                 throw new CITParsingException("Could not resolve replacement texture", properties, textureProp.position());
-
-            this.replacementTextureId = asTextureId(resolvedTexture);
         }
 
-        for (PropertyValue propertyValue : properties.get("citresewn", "texture", "tile")) {
+        for (PropertyValue propertyValue : textureProperties) {
             if (propertyValue.keyMetadata() == null)
                 continue;
 
@@ -134,15 +136,15 @@ public class TypeItem extends CITType {
                     : asModelId(resolvedModel);
         }
 
-        if (this.replacementModelId == null && !properties.get("citresewn", "texture", "tile").isEmpty()) {
-            if (textureProp != null) {
+        if (this.replacementModelId == null) {
+            if (this.replacementTextureId != null) {
                 for (Item item : this.items) {
                     Identifier itemModelId = itemModelId(item);
                     this.generatedTextureModelIds.putIfAbsent(itemModelId, generatedTextureModelId(properties.identifier, itemModelId));
                 }
-            } else {
+            } else if (!textureProperties.isEmpty()) {
                 this.warnedTextureOnly = true;
-                warn("Texture-only item CITs without a base texture are not ported to 26.1 yet", properties.get("citresewn", "texture", "tile").iterator().next(), properties);
+                warn("Texture-only item CITs without a base texture are not ported to 26.1 yet", textureProperties.iterator().next(), properties);
             }
         }
     }

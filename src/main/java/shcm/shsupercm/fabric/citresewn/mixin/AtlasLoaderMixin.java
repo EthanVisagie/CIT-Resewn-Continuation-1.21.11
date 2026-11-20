@@ -12,6 +12,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import shcm.shsupercm.fabric.citresewn.CITResewn;
+import shcm.shsupercm.fabric.citresewn.pack.CitSpriteResource;
 import shcm.shsupercm.fabric.citresewn.pack.PackParser;
 
 import java.io.IOException;
@@ -43,7 +44,7 @@ public class AtlasLoaderMixin {
                         if (id.getPath().equals("blocks")) {
                             FileToIdConverter resourceFinder = new FileToIdConverter(root + "/cit", ".png");
                             for (Map.Entry<Identifier, Resource> entry : resourceFinder.listMatchingResources(resourceManager).entrySet())
-                                regions.add(resourceFinder.fileToId(entry.getKey()).withPrefix(root + "/cit/"), entry.getValue());
+                                regions.add(resourceFinder.fileToId(entry.getKey()).withPrefix(root + "/cit/"), CitSpriteResource.allowJpeg(entry.getKey(), entry.getValue()));
                             continue;
                         }
 
@@ -66,7 +67,7 @@ public class AtlasLoaderMixin {
                     }
                     for (Identifier sprite : rootTextures) {
                         Identifier png = sprite.withPath("textures/" + sprite.getPath() + ".png");
-                        resourceManager.getResource(png).ifPresent(resource -> regions.add(sprite, resource));
+                        resourceManager.getResource(png).ifPresent(resource -> regions.add(sprite, CitSpriteResource.allowJpeg(png, resource)));
                     }
                 }
 
