@@ -37,8 +37,11 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.ChargedProjectiles;
 import java.io.IOException;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
@@ -90,11 +93,7 @@ public class TypeItem extends CITType {
                 continue;
 
             String keyMetadata = propertyValue.keyMetadata();
-            if (!keyMetadata.equals("trident_throwing")
-                    && !keyMetadata.equals("bow")
-                    && !keyMetadata.equals("bow_pulling_0")
-                    && !keyMetadata.equals("bow_pulling_1")
-                    && !keyMetadata.equals("bow_pulling_2")) {
+            if (!isSupportedSubModel(keyMetadata)) {
                 warn("Sub-item model override is not ported to 1.21.11 yet", propertyValue, properties);
                 continue;
             }
@@ -234,8 +233,9 @@ public class TypeItem extends CITType {
                                            Map<Identifier, UnbakedModel> relativeParents, CitCompatTextures.Cache textureCache) {
         JsonObject model = CitCompatTextures.parseLenientJsonObject(json);
         var originalParent = model.get("parent");
+        int parentAtlasFlags = 0;
         try {
-            resolveRelativeParents(model, modelResourceId, resourceManager, relativeParents, textureCache);
+            parentAtlasFlags = resolveRelativeParents(model, modelResourceId, resourceManager, relativeParents, textureCache);
         } catch (IOException | RuntimeException e) {
             if (originalParent != null)
                 model.add("parent", originalParent);
@@ -255,18 +255,20 @@ public class TypeItem extends CITType {
             textures.addProperty(entry.getKey(), entry.getValue().toString());
 
         addDefaultParticleTexture(textures);
-        CitCompatTextures.promoteMixedItemAtlasTextures(textures);
+        CitCompatTextures.promoteMixedItemAtlasTextures(textures, parentAtlasFlags);
 
         model.add("textures", textures);
         clampOutOfBoundsUvs(model);
         return model.toString();
     }
 
-    private static void resolveRelativeParents(JsonObject model, Identifier resourceId, ResourceManager resources,
-                                               Map<Identifier, UnbakedModel> parents, CitCompatTextures.Cache textureCache) throws IOException {
-        Map<Identifier, JsonObject> pending = new LinkedHashMap<>();
+    private static int resolveRelativeParents(JsonObject model, Identifier resourceId, ResourceManager resources,
+                                              Map<Identifier, UnbakedModel> parents, CitCompatTextures.Cache textureCache) throws IOException {
+        List<Map.Entry<Identifier, JsonObject>> pending = new ArrayList<>();
+        Set<Identifier> pendingAliases = new HashSet<>();
         Set<Identifier> visited = new HashSet<>();
         visited.add(resourceId);
+        int tailFlags = 0;
         while (model.get("parent") instanceof JsonPrimitive parent && parent.isString()) {
             String path = parent.getAsString();
             if (!CitCompatTextures.isCitModelParent(path))
@@ -283,28 +285,40 @@ public class TypeItem extends CITType {
                 }
                 throw new IOException("Circular relative model parent " + target);
             }
-            if (!visited.add(target) || pending.containsKey(alias))
+            if (!visited.add(target) || !pendingAliases.add(alias))
                 throw new IOException("Circular relative model parent " + target);
             model.addProperty("parent", alias.toString());
-            if (parents.containsKey(alias))
+            if (parents.containsKey(alias)) {
+                tailFlags = textureCache.getModelAtlasFlags(alias);
                 break;
+            }
             try (var reader = resources.getResourceOrThrow(target).openAsReader()) {
                 model = CitCompatTextures.parseLenientJsonObject(reader);
             }
-            if (model.get("textures") instanceof JsonObject textures) {
+            if (model.get("textures") instanceof JsonObject textures)
                 resolveModelTextureReferences(textures, target, textureCache);
-                CitCompatTextures.promoteMixedItemAtlasTextures(textures);
-            }
             clampOutOfBoundsUvs(model);
-            pending.put(alias, model);
+            pending.add(Map.entry(alias, model));
             resourceId = target;
         }
+        int inheritedFlags = tailFlags;
         if (!pending.isEmpty()) {
             Map<Identifier, UnbakedModel> decoded = new LinkedHashMap<>();
-            for (var entry : pending.entrySet())
-                decoded.put(entry.getKey(), CuboidModel.fromStream(new StringReader(entry.getValue().toString())));
+            // Propagate atlas flags from deepest parent back down to immediate parent so child
+            // models inherit item/block atlas usage from their parent chain.
+            for (int i = pending.size() - 1; i >= 0; i--) {
+                var entry = pending.get(i);
+                JsonObject parentObj = entry.getValue();
+                if (parentObj.get("textures") instanceof JsonObject textures) {
+                    inheritedFlags |= CitCompatTextures.collectTextureAtlasFlags(textures);
+                    CitCompatTextures.promoteMixedItemAtlasTextures(textures, inheritedFlags);
+                }
+                textureCache.setModelAtlasFlags(entry.getKey(), inheritedFlags);
+                decoded.put(entry.getKey(), CuboidModel.fromStream(new StringReader(parentObj.toString())));
+            }
             parents.putAll(decoded);
         }
+        return inheritedFlags;
     }
 
     private static void resolveModelTextureReferences(JsonObject textures, Identifier modelResourceId, CitCompatTextures.Cache textureCache) {
@@ -378,12 +392,47 @@ public class TypeItem extends CITType {
         return this.warnedTextureOnly;
     }
 
+    private static boolean isSupportedSubModel(String keyMetadata) {
+        return switch (keyMetadata) {
+            case "trident_throwing",
+                    "bow",
+                    "bow_pulling_0",
+                    "bow_pulling_1",
+                    "bow_pulling_2",
+                    "crossbow_standby",
+                    "crossbow_pulling_0",
+                    "crossbow_pulling_1",
+                    "crossbow_pulling_2",
+                    "crossbow_arrow",
+                    "crossbow_firework",
+                    "shield_blocking" -> true;
+            default -> false;
+        };
+    }
+
     public Identifier getGeneratedItemModelId(ItemStack stack, LivingEntity entity) {
+        if (stack.is(Items.CROSSBOW)) {
+            ChargedProjectiles charged = stack.get(DataComponents.CHARGED_PROJECTILES);
+            if (charged != null && !charged.isEmpty()) {
+                Identifier chargedId = charged.contains(Items.FIREWORK_ROCKET)
+                        ? this.generatedSubItemModelIds.getOrDefault("crossbow_firework", this.generatedSubItemModelIds.get("crossbow_arrow"))
+                        : this.generatedSubItemModelIds.get("crossbow_arrow");
+                if (chargedId != null)
+                    return chargedId;
+            }
+        }
+
         if (entity != null && entity.isUsingItem() && ItemStack.matches(entity.getUseItem(), stack)) {
             String subModel = null;
-            if (stack.is(net.minecraft.world.item.Items.BOW)) {
+            if (stack.is(Items.BOW)) {
                 int useTicks = entity.getTicksUsingItem();
                 subModel = useTicks >= 18 ? "bow_pulling_2" : useTicks >= 13 ? "bow_pulling_1" : "bow_pulling_0";
+            } else if (stack.is(Items.CROSSBOW)) {
+                int chargeDuration = CrossbowItem.getChargeDuration(stack, entity);
+                float pull = chargeDuration <= 0 ? 1.0F : (float) entity.getTicksUsingItem() / (float) chargeDuration;
+                subModel = pull >= 1.0F ? "crossbow_pulling_2" : pull >= 0.58F ? "crossbow_pulling_1" : "crossbow_pulling_0";
+            } else if (stack.is(Items.SHIELD) && this.generatedSubItemModelIds.containsKey("shield_blocking")) {
+                subModel = "shield_blocking";
             } else if (this.generatedSubItemModelIds.containsKey("trident_throwing")) {
                 subModel = "trident_throwing";
             }
@@ -394,6 +443,9 @@ public class TypeItem extends CITType {
 
         if (this.generatedSubItemModelIds.containsKey("bow"))
             return this.generatedSubItemModelIds.get("bow");
+
+        if (this.generatedSubItemModelIds.containsKey("crossbow_standby"))
+            return this.generatedSubItemModelIds.get("crossbow_standby");
 
         if (this.generatedItemModelId != null)
             return this.generatedItemModelId;

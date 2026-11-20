@@ -101,6 +101,7 @@ public final class CitCompatTextures {
         final List<PackResources> reversedPacks;
         private final Map<String, Optional<Resolution>> resolved = new HashMap<>();
         private final Map<String, Optional<RawLookup>> rawLookups = new HashMap<>();
+        private final Map<Identifier, Integer> modelAtlasFlags = new HashMap<>();
 
         public Cache(ResourceManager resourceManager) {
             this.resourceManager = resourceManager;
@@ -123,6 +124,14 @@ public final class CitCompatTextures {
 
         void putRaw(String key, Optional<RawLookup> value) {
             rawLookups.put(key, value);
+        }
+
+        public int getModelAtlasFlags(Identifier modelAlias) {
+            return modelAtlasFlags.getOrDefault(modelAlias, 0);
+        }
+
+        public void setModelAtlasFlags(Identifier modelAlias, int flags) {
+            modelAtlasFlags.put(modelAlias, flags);
         }
     }
 
@@ -276,14 +285,13 @@ public final class CitCompatTextures {
         }
     }
 
-    /**
-     * Rewrites promotable CIT/compat textures inside a resolved model (whose textures have already
-     * been normalized) to their dedicated {@code citresewn:item_atlas/...} aliases when the model
-     * mixes {@code item/*} textures with CIT textures and uses no {@code block/*} textures.
-     */
-    public static void promoteMixedItemAtlasTextures(JsonObject textures) {
-        boolean hasItemSprite = false;
-        boolean hasBlockSprite = false;
+    public static final int ATLAS_FLAG_ITEM = 1;
+    public static final int ATLAS_FLAG_BLOCK = 2;
+
+    public static int collectTextureAtlasFlags(JsonObject textures) {
+        if (textures == null)
+            return 0;
+        int flags = 0;
         for (JsonElement value : textures.asMap().values()) {
             if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString())
                 continue;
@@ -294,11 +302,22 @@ public final class CitCompatTextures {
             if (id == null)
                 continue;
             if (isVanillaItemPath(id.getPath()))
-                hasItemSprite = true;
+                flags |= ATLAS_FLAG_ITEM;
             else if (isVanillaBlockPath(id.getPath()))
-                hasBlockSprite = true;
+                flags |= ATLAS_FLAG_BLOCK;
         }
-        if (!hasItemSprite || hasBlockSprite)
+        return flags;
+    }
+
+    /**
+     * Rewrites promotable CIT/compat textures inside a resolved model (whose textures have already
+     * been normalized) to their dedicated {@code citresewn:item_atlas/...} aliases when the model
+     * (including its CIT parent chain) mixes {@code item/*} textures with CIT textures and uses no
+     * {@code block/*} textures.
+     */
+    public static void promoteMixedItemAtlasTextures(JsonObject textures, int inheritedFlags) {
+        int flags = inheritedFlags | collectTextureAtlasFlags(textures);
+        if ((flags & ATLAS_FLAG_ITEM) == 0 || (flags & ATLAS_FLAG_BLOCK) != 0)
             return;
 
         for (Map.Entry<String, JsonElement> entry : new ArrayList<>(textures.entrySet())) {
