@@ -57,7 +57,9 @@ public abstract class CITType {
             return resourceManager.getResource(pathIdentifier).isPresent() ? pathIdentifier: null;
         }
 
-        Identifier pathIdentifier = Identifier.tryParse(path);
+        Identifier pathIdentifier = Identifier.tryParse(path.replace('\\', '/'));
+        if (pathIdentifier == null)
+            return null;
 
         path = pathIdentifier.getPath().replace('\\', '/');
         if (!path.endsWith(extension))

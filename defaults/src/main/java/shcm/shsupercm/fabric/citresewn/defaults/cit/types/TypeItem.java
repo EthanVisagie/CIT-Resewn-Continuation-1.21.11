@@ -181,7 +181,7 @@ public class TypeItem extends CITType {
                         String json = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
                         models.put(this.replacementModelId, CuboidModel.fromStream(new StringReader(applyReplacementTexture(json, this.replacementModelResourceId, resourceManager))));
                     }
-            } catch (IOException e) {
+            } catch (IOException | RuntimeException e) {
                 CITResewn.logErrorLoading("Errored while loading CIT item model " + this.replacementModelResourceId + ": " + e.getMessage());
             }
 
@@ -197,7 +197,7 @@ public class TypeItem extends CITType {
                         String json = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
                         models.put(entry.getValue(), CuboidModel.fromStream(new StringReader(applyReplacementTexture(json, replacementSubModelResourceId, resourceManager))));
                     }
-            } catch (IOException e) {
+            } catch (IOException | RuntimeException e) {
                 CITResewn.logErrorLoading("Errored while loading CIT item model " + replacementSubModelResourceId + ": " + e.getMessage());
             }
         }
