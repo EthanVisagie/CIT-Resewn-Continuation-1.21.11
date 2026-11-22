@@ -1,22 +1,25 @@
-## 1.2.2-fork.10+1.21.8
+## 1.2.2-fork.11+1.21.8
 
-Downport of CIT Resewn Continuation `1.2.2-fork.10` (Minecraft 1.21.11, Fabric) to **Minecraft 1.21.8, Fabric**.
+Downport of CIT Resewn Continuation `1.2.2-fork.10` to **Minecraft 1.21.8, Fabric**, plus item-CIT hot-path performance optimizations contributed by `@BrokenJade-Chen`.
 
-The 1.21.8 line was previously stranded at the fork.5 code level on the upstream `port/1.21.8`
-branch. This build keeps that branch's 1.21.8-specific rendering/asset adaptations and backports
-every fork.6 – fork.10 change on top of them.
+### Performance Improvements
+- Memoized `ItemStack#getComponents()` and encoded component NBT per `CITContext`, avoiding repeated codec encoding across hundreds of rules.
+- Added a `custom_data` exact-string value index (`item_value_index`, default `true`) in `TypeItem.Container` so large packs only test matching candidate rules while preserving weight order.
+- Throttled `TypeItem.ItemCITCache` component revalidation to 100 ms intervals while detecting in-place `MergedComponentMap` mutations and honoring `cache_ms = 0`.
+- Reused a single `CITContext` in `ItemModelManagerMixin` across enchantment and item model passes.
 
-### Backported from fork.6 – fork.10
+### Backported from fork.6 - fork.10
 
 - Restored OptiFine sub-item model overrides on 1.21.8: `model.trident_throwing`,
   `model.bow_pulling_0/1/2`, `model.crossbow_pulling_0/1/2`, `model.crossbow_arrow`,
-  `model.crossbow_firework` and `model.shield_blocking`, including the `model.cit/...` alias form.
-- Texture-only CITs can now also drive sub-item models, not just the base item model.
+  `model.crossbow_firework` and `model.shield_blocking`, including the `model.cit/...` alias form
+  and standalone sub-item model rules.
 - Model-backed CITs whose model JSON uses OptiFine-style relative texture references such as
   `./texture_name` are resolved correctly instead of failing to load.
 - A CIT that sets both `model` and `texture` now routes the resolved texture through a generated
   model instead of silently preferring the raw model id.
-- Malformed CIT model JSON is logged and skipped instead of aborting the whole model reload.
+- Malformed CIT model JSON is logged and skipped cleanly, falling back to the vanilla item model
+  instead of aborting the reload or hiding the item.
 - Legacy item ids are aliased so packs written for older Minecraft versions keep matching:
   `minecraft:gold_sword` → `golden_sword`, `minecraft:wood_pickaxe` → `wooden_pickaxe`, etc.
 - Legacy `nbt.display.Name` / `nbt.display.Lore` compatibility warnings are throttled per pack

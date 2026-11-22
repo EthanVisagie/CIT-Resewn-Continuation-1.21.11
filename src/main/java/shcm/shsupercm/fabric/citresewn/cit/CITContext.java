@@ -115,8 +115,7 @@ public class CITContext {
         NbtElement cached = this.componentNbt.get(type);
         if (cached == null && !this.componentNbt.containsKey(type)) {
             cached = encoder.get();
-            if (cached != null)
-                this.componentNbt.put(type, cached);
+            this.componentNbt.put(type, cached);
         }
         return cached;
     }

@@ -67,10 +67,8 @@ public abstract class ItemModelManagerMixin {
 
         ItemAsset.Properties properties = this.propertiesGetter.apply(identifier);
         ItemModel itemModel = this.modelGetter.apply(identifier);
-        if (properties == null || itemModel == null) {
-            ci.cancel();
+        if (properties == null || itemModel == null)
             return;
-        }
 
         renderState.setOversizedInGui(properties.oversizedInGui());
         itemModel.update(

@@ -69,6 +69,7 @@ public class TypeItem extends CITType {
     private Identifier replacementTextureId;
     private final Map<String, Identifier> replacementTextures = new LinkedHashMap<>();
     private final Map<Identifier, Identifier> generatedTextureModelIds = new LinkedHashMap<>();
+    private final Set<Identifier> failedGeneratedModelIds = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private boolean warnedTextureOnly;
     private static final Set<String> DIRECT_SUB_MODEL_KEYS = Set.of(
             "trident_throwing",
@@ -193,40 +194,56 @@ public class TypeItem extends CITType {
 
     public Map<Identifier, UnbakedModel> createUnbakedModels(ResourceManager resourceManager) {
         Map<Identifier, UnbakedModel> models = new LinkedHashMap<>();
+        this.failedGeneratedModelIds.clear();
 
         if (this.replacementModelId != null && this.replacementModelResourceId != null)
             try {
                 var resource = resourceManager.getResource(this.replacementModelResourceId);
-                if (resource.isPresent())
+                if (resource.isPresent()) {
                     try (var inputStream = resource.get().getInputStream()) {
                         String json = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
                         try {
                             models.put(this.replacementModelId, JsonUnbakedModel.deserialize(new StringReader(applyReplacementTexture(json, this.replacementModelResourceId, resourceManager))));
                         } catch (Exception e) {
+                            if (this.generatedItemModelId != null)
+                                this.failedGeneratedModelIds.add(this.generatedItemModelId);
                             CITResewn.logErrorLoading("Errored while decoding CIT item model " + this.replacementModelResourceId + ": " + e.getMessage());
                         }
                     }
+                } else if (this.generatedItemModelId != null) {
+                    this.failedGeneratedModelIds.add(this.generatedItemModelId);
+                }
             } catch (IOException e) {
+                if (this.generatedItemModelId != null)
+                    this.failedGeneratedModelIds.add(this.generatedItemModelId);
                 CITResewn.logErrorLoading("Errored while loading CIT item model " + this.replacementModelResourceId + ": " + e.getMessage());
             }
 
         for (Map.Entry<String, Identifier> entry : this.replacementSubModelIds.entrySet()) {
             Identifier replacementSubModelResourceId = this.replacementSubModelResourceIds.get(entry.getKey());
+            Identifier generatedSubModelId = this.generatedSubItemModelIds.get(entry.getKey());
             if (replacementSubModelResourceId == null)
                 continue;
 
             try {
                 var resource = resourceManager.getResource(replacementSubModelResourceId);
-                if (resource.isPresent())
+                if (resource.isPresent()) {
                     try (var inputStream = resource.get().getInputStream()) {
                         String json = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
                         try {
                             models.put(entry.getValue(), JsonUnbakedModel.deserialize(new StringReader(applyReplacementTexture(json, replacementSubModelResourceId, resourceManager))));
                         } catch (Exception e) {
+                            if (generatedSubModelId != null)
+                                this.failedGeneratedModelIds.add(generatedSubModelId);
                             CITResewn.logErrorLoading("Errored while decoding CIT item model " + replacementSubModelResourceId + ": " + e.getMessage());
                         }
                     }
+                } else if (generatedSubModelId != null) {
+                    this.failedGeneratedModelIds.add(generatedSubModelId);
+                }
             } catch (IOException e) {
+                if (generatedSubModelId != null)
+                    this.failedGeneratedModelIds.add(generatedSubModelId);
                 CITResewn.logErrorLoading("Errored while loading CIT item model " + replacementSubModelResourceId + ": " + e.getMessage());
             }
         }
@@ -242,6 +259,7 @@ public class TypeItem extends CITType {
             try {
                 models.put(entry.getValue(), JsonUnbakedModel.deserialize(new StringReader(json)));
             } catch (Exception e) {
+                this.failedGeneratedModelIds.add(entry.getValue());
                 CITResewn.logErrorLoading("Errored while decoding generated CIT texture model " + entry.getValue() + ": " + e.getMessage());
             }
         }
@@ -308,29 +326,38 @@ public class TypeItem extends CITType {
     }
 
     public boolean supportsItemModelOverride() {
-        return this.generatedItemModelId != null || !this.generatedTextureModelIds.isEmpty();
+        return this.generatedItemModelId != null
+                || !this.generatedSubItemModelIds.isEmpty()
+                || !this.generatedTextureModelIds.isEmpty();
     }
 
     public boolean warnedTextureOnly() {
         return this.warnedTextureOnly;
     }
 
+    public boolean hasSubItemModels() {
+        return !this.generatedSubItemModelIds.isEmpty();
+    }
+
     public Identifier getGeneratedItemModelId(ItemStack stack, LivingEntity entity) {
         String subItemModelKey = resolveSubItemModelKey(stack, entity);
         if (subItemModelKey != null) {
             Identifier generatedSubItemModelId = this.generatedSubItemModelIds.get(subItemModelKey);
-            if (generatedSubItemModelId != null)
+            if (generatedSubItemModelId != null && !this.failedGeneratedModelIds.contains(generatedSubItemModelId))
                 return generatedSubItemModelId;
         }
 
-        if (this.generatedItemModelId != null)
+        if (this.generatedItemModelId != null && !this.failedGeneratedModelIds.contains(this.generatedItemModelId))
             return this.generatedItemModelId;
 
         Identifier itemModelId = normalizeItemModelId(stack.get(DataComponentTypes.ITEM_MODEL));
         if (itemModelId == null)
             itemModelId = itemModelId(stack.getItem());
 
-        return this.generatedTextureModelIds.get(itemModelId);
+        Identifier generatedTextureModelId = this.generatedTextureModelIds.get(itemModelId);
+        return generatedTextureModelId != null && !this.failedGeneratedModelIds.contains(generatedTextureModelId)
+                ? generatedTextureModelId
+                : null;
     }
 
     private static Identifier asModelId(Identifier resourceIdentifier) {
@@ -618,17 +645,26 @@ public class TypeItem extends CITType {
             if (index == null || index.isEmpty())
                 return citresewn$firstMatch(loadedForItemType, context);
 
-            List<CIT<TypeItem>> candidates = citresewn$candidates(context, index);
+            Set<CIT<TypeItem>> candidates = citresewn$candidates(context, index);
             if (candidates == null) // the stack's components could not be indexed, fall back to the full scan
                 return citresewn$firstMatch(loadedForItemType, context);
 
             Set<CIT<TypeItem>> unindexed = this.unindexedByItem.get(item);
             if (unindexed == null || unindexed.isEmpty()) {
+                if (candidates.isEmpty())
+                    return null;
+
+                if (candidates.size() == 1) {
+                    CIT<TypeItem> only = candidates.iterator().next();
+                    return citresewn$matchesActiveModel(only, context) ? only : null;
+                }
+
                 // every rule of this item is in the index, so testing the candidates in weight order is
                 // equivalent to walking the whole set
-                candidates.sort(WeightCondition.COMPARATOR);
-                for (CIT<TypeItem> cit : candidates)
-                    if (cit.type.supportsItemModelOverride() && cit.test(context))
+                List<CIT<TypeItem>> sorted = new ArrayList<>(candidates);
+                sorted.sort(WeightCondition.COMPARATOR);
+                for (CIT<TypeItem> cit : sorted)
+                    if (citresewn$matchesActiveModel(cit, context))
                         return cit;
                 return null;
             }
@@ -636,7 +672,7 @@ public class TypeItem extends CITType {
             // mixed: keep the original weight order across indexed and unindexed rules
             for (CIT<TypeItem> cit : loadedForItemType)
                 if ((unindexed.contains(cit) || candidates.contains(cit))
-                        && cit.type.supportsItemModelOverride() && cit.test(context))
+                        && citresewn$matchesActiveModel(cit, context))
                     return cit;
 
             return null;
@@ -644,10 +680,16 @@ public class TypeItem extends CITType {
 
         private static CIT<TypeItem> citresewn$firstMatch(Set<CIT<TypeItem>> cits, CITContext context) {
             for (CIT<TypeItem> cit : cits)
-                if (cit.type.supportsItemModelOverride() && cit.test(context))
+                if (citresewn$matchesActiveModel(cit, context))
                     return cit;
 
             return null;
+        }
+
+        private static boolean citresewn$matchesActiveModel(CIT<TypeItem> cit, CITContext context) {
+            return cit.type.supportsItemModelOverride()
+                    && cit.test(context)
+                    && cit.type.getGeneratedItemModelId(context.stack, context.entity) != null;
         }
 
         /**
@@ -655,6 +697,9 @@ public class TypeItem extends CITType {
          *         i.e. whether it reads the rendering entity
          */
         private static boolean citresewn$needsEntity(CIT<TypeItem> cit) {
+            if (cit.type.hasSubItemModels())
+                return true;
+
             for (CITCondition condition : cit.conditions)
                 if (condition instanceof shcm.shsupercm.fabric.citresewn.defaults.cit.conditions.ConditionHand)
                     return true;
@@ -686,10 +731,10 @@ public class TypeItem extends CITType {
         }
 
         /**
-         * @return the indexed rules that could match this context, an empty list when none can,
+         * @return the indexed rules that could match this context, an empty set when none can,
          *         or {@code null} when the context cannot be indexed at all
          */
-        private static List<CIT<TypeItem>> citresewn$candidates(CITContext context, Map<String, Set<CIT<TypeItem>>> index) {
+        private static Set<CIT<TypeItem>> citresewn$candidates(CITContext context, Map<String, Set<CIT<TypeItem>>> index) {
             List<String> values = citresewn$customDataValues(context);
             if (values == null)
                 return null;
@@ -705,7 +750,7 @@ public class TypeItem extends CITType {
                 candidates.addAll(hits);
             }
 
-            return candidates == null ? new ArrayList<>() : new ArrayList<>(candidates);
+            return candidates == null ? Set.of() : candidates;
         }
 
         /**
@@ -796,8 +841,8 @@ public class TypeItem extends CITType {
          */
         private static final long VALIDATE_INTERVAL_MS = 100;
 
-        /** Component map instance the cached result was resolved against. */
-        private Object lastComponents = null;
+        /** Hash of the stack's ComponentMap when the cached result was resolved (detects in-place mutations). */
+        private int lastComponentHash = 0;
         private Item lastItem = null;
         private int lastCount = -1;
         private int lastEpoch = -1;
@@ -809,24 +854,29 @@ public class TypeItem extends CITType {
 
         @Override
         public java.lang.ref.WeakReference<CIT<TypeItem>> get(CITContext context) {
+            if (CITResewnConfig.INSTANCE.cache_ms <= 0) {
+                this.cit = null;
+                return super.get(context);
+            }
+
             Item item = context.stack.getItem();
             int count = context.stack.getCount();
             int epoch = CONTAINER.epoch;
             long now = System.currentTimeMillis();
 
-            // Fast path: nothing about the stack can have changed without us noticing, because the only way to
-            // change it is to swap out its component map or its count.
+            // Fast path: avoid polling ItemStack#getComponents() every frame (other mods can hook it).
             boolean structural = !CONTAINER.citresewn$needsEntity(item);
             if (this.cit != null && structural
-                    && count == lastCount && epoch == lastEpoch
+                    && item == lastItem && count == lastCount && epoch == lastEpoch
                     && now - lastValidatedStamp < VALIDATE_INTERVAL_MS)
                 return this.cit;
 
-            Object components = context.stack.getComponents();
-            if (item != lastItem || components != lastComponents || count != lastCount || epoch != lastEpoch) {
+            // Reuse context.components() so a cache miss does not invoke ItemStack#getComponents() twice.
+            int componentHash = context.components().hashCode();
+            if (item != lastItem || componentHash != lastComponentHash || count != lastCount || epoch != lastEpoch) {
                 this.cit = null;
                 this.lastItem = item;
-                this.lastComponents = components;
+                this.lastComponentHash = componentHash;
                 this.lastCount = count;
                 this.lastEpoch = epoch;
             }
